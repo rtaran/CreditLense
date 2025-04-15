@@ -23,6 +23,7 @@ A web-based application that allows clients to upload a **PDF financial statemen
 - Investors & VCs  
 - Fintech credit risk teams  
 - Accountants & consultants
+- Auditors
 
 ---
 

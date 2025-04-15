@@ -1,6 +1,9 @@
-def main():
-    print("Hello from credit-lense!")
+from uv import Uv
+from db.models import Base
+from db.database import engine
+from api import document
 
+app = Uv()
+Base.metadata.create_all(bind=engine)
 
-if __name__ == "__main__":
-    main()
+app.include_router(document.router, prefix="/document")
