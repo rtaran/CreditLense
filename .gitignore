@@ -1,6 +1,5 @@
 # Environment variables
 .env
-.env.*
 
 # temp file while working and testing the code
 _working_files
