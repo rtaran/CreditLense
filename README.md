@@ -1,6 +1,6 @@
-# 💼 AI-Powered Credit Memo Web App
+# 💼 AI-Powered Credit Memo Co-Pilot Web App
 
-# CreditLense: “From Data to Memo — In Seconds.”
+# CreditLense: “From Data to Memo — In Seconds. Invest your time in decision-making, not data crunching”
 
 A web-based application that allows clients to upload a **PDF financial statement** (or provide a link to one), which is then processed and analyzed using AI. The output is a **professionally formatted Credit Memo** generated as a downloadable **.docx (Word)** file.
 
@@ -11,7 +11,7 @@ A web-based application that allows clients to upload a **PDF financial statemen
 **What it does:**
 
 1. 📤 Upload or link to a company’s financial PDF.
-2. 🧠 Extract and analyze the content using an LLM (e.g., GPT-4).
+2. 🧠 Extract and analyze the content using an LLM (e.g., GPT-4, Gemini, etc.).
 3. 📄 Generate a customized **Credit Memo** in Microsoft Word format.
 4. ⬇️ Client downloads the memo in a clean, structured template.
 
@@ -29,7 +29,7 @@ A web-based application that allows clients to upload a **PDF financial statemen
 
 ## 🧠 App Highlights
 
-- ✨ **Simple web interface** built with Flask / Streamlit / FastAPI
+- ✨ **Simple web interface** built with FastAPI
 - 📥 PDF upload or link input supported
 - 🧠 AI-driven extraction and interpretation of key financial data
 - 📊 Customizable methodology stored in a prompt file
@@ -58,7 +58,8 @@ A web-based application that allows clients to upload a **PDF financial statemen
 │   └── credit_memo_.docx
 │
 ├── app.py                        # Main app entry
-├── requirements.txt
+├── pyproject.toml              # Python dependency and tool config (uv)
+├── .env.template               # Example environment file
 └── README.md
 
 ---
@@ -66,20 +67,17 @@ A web-based application that allows clients to upload a **PDF financial statemen
 ## ⚙️ Setup Instructions
 
 ```bash
-# Clone and enter the project
-git clone https://github.com/yourusername/ai-credit-memo-webapp.git
-cd ai-credit_memo_webapp
-
-# Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the web app
-python app.py
+git clone https://github.com/rtaran/credit_lense.git
+cd credit_lense
+pip install uv
+uv init
+uv sync
+uv lock
+./run.sh
 ```
+
+⚠️ Make sure the `.env` file exists in the root directory. You can use the included `.env.template` as a starting point.
+
 OPENAI_API_KEY=your_openai_key
 UPLOAD_FOLDER=./output
 

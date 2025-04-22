@@ -1,15 +1,21 @@
 [project]
 name = "credit-lense"
 version = "0.1.0"
-description = "Credit Memo writer backed by AI, which gets PDF, path it through the credit analysis methodology and produce a report"
+description = "AI-powered tool that analyzes PDFs using credit methodology and generates financial memos."
 requires-python = ">=3.12"
+
 dependencies = [
-    "dotenv>=0.9.9",
-    "fastapi>=0.115.12",
-    "fitz>=0.0.1.dev2",
-    "pylint>=3.3.6",
-    "pymupdf>=1.25.5",
-    "requests>=2.32.3",
-    "sqlalchemy>=2.0.40",
-    "uv>=0.6.14",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.27.1",
+    "pymupdf>=1.25.5", # for PDF parsing (fitz)
+    "python-dotenv>=1.0.1", # for loading .env files
+    "sqlalchemy>=2.0.40", # for ORM
+    "requests>=2.32.3", # for HTTP requests
+    "pylint>=3.3.6", # for linting
+    "multipart>=1.2.1",
+    "python-multipart>=0.0.20",
 ]
+
+[tool.uv]
+# Optional section to specify which file to run by default (optional)
+# entrypoint = "app.main:app"
