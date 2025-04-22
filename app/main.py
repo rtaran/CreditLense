@@ -19,3 +19,4 @@ def root():
 @app.get("/favicon.ico")
 def favicon():
     return FileResponse(os.path.join("static", "favicon.ico"))
+
