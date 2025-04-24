@@ -1,9 +1,12 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.models import CompanyData
+from app.models import CompanyData, CompanyDataReturnModel
 from app.database import SessionLocal
 import fitz # PyMuPDF
 import tempfile
+
+from app.utils.gemini import Gemini
+from app.utils.openai import Openai
 
 router = APIRouter()
 
@@ -34,6 +37,18 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
     #contents = await file.read() # commented out to add local pdf exrractor
     #pdf_text = contents.decode("utf-8", errors="ignore") # commented out to add local pdf exrractor
     pdf_text = extract_text_from_pdf(file)
+    
+    # step 1 ask .env which llm to use
+
+    model = os.getenv("LLM_PROVIDER", "google")
+    # Step 2 instantiate the class eg llm = Gemini(pdf_text)
+
+    if model == "openai":
+        llm = openai(pdf_text)
+    else:
+        llm = Gemini(pdf_text)
+    # Step 3 response = llm.request()
+    # Step 4 use instead of line 46 : doc = CompanyData(pdf_file_name=file.filename, pdf_string=pdf_text, ), but with response data in it!
 
     doc = CompanyData(pdf_file_name=file.filename, pdf_string=pdf_text)
     db.add(doc)
