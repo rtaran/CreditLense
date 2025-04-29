@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Document - Credit Lense</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <link rel="icon" href="{{ url_for('static', path='/favicon.ico') }}">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Credit Lense</h1>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/documents">Documents</a></li>
+                    <li><a href="/memos">Memos</a></li>
+                    <li><a href="/upload" class="active">Upload</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="form-container">
+            <h2>Upload Financial Document</h2>
+            <p>Upload a PDF financial document to analyze and generate memos.</p>
+            
+            <form id="upload-form" action="/documents/" method="post" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="file-input">Select PDF File</label>
+                    <input type="file" id="file-input" name="file" accept=".pdf">
+                </div>
+                
+                <div class="form-group">
+                    <label for="company-name">Company Name (Optional)</label>
+                    <input type="text" id="company-name" name="company_name" placeholder="Enter company name">
+                </div>
+                
+                <button type="submit" class="btn primary">Upload Document</button>
+            </form>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Credit Lense. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', path='/js/main.js') }}"></script>
+</body>
+</html>

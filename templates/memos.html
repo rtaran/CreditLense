@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memos - Credit Lense</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <link rel="icon" href="{{ url_for('static', path='/favicon.ico') }}">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Credit Lense</h1>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/documents">Documents</a></li>
+                    <li><a href="/memos" class="active">Memos</a></li>
+                    <li><a href="/upload">Upload</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <h2>Financial Memos</h2>
+
+        <div class="actions">
+            <a href="/documents" class="btn primary">Generate New Memo</a>
+        </div>
+
+        {% if memos %}
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Document ID</th>
+                        <th>LLM Provider</th>
+                        <th>Preview</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for memo in memos %}
+                    <tr>
+                        <td>{{ memo.memo_id }}</td>
+                        <td>{{ memo.document_id }}</td>
+                        <td>
+                            <span class="provider-badge {% if memo.llm_provider == 'google' %}provider-google{% elif memo.llm_provider == 'openai' %}provider-openai{% endif %}">
+                                {{ memo.llm_provider|capitalize if memo.llm_provider else "Default" }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="memo-preview">
+                                {{ memo.memo_string[:100] }}{% if memo.memo_string|length > 100 %}...{% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <a href="/download-memo/{{ memo.memo_id }}" class="btn primary">Download</a>
+                            <button class="btn secondary delete-memo" data-id="{{ memo.memo_id }}">Delete</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No memos found. Go to <a href="/documents">Documents</a> to generate memos.</p>
+        </div>
+        {% endif %}
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Credit Lense. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', path='/js/main.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documents - Credit Lense</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <link rel="icon" href="{{ url_for('static', path='/favicon.ico') }}">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Credit Lense</h1>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/documents" class="active">Documents</a></li>
+                    <li><a href="/memos">Memos</a></li>
+                    <li><a href="/upload">Upload</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <h2>Financial Documents</h2>
+
+        <div class="actions">
+            <a href="/upload" class="btn primary">Upload New Document</a>
+        </div>
+
+        {% if documents %}
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Filename</th>
+                        <th>Company</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for document in documents %}
+                    <tr>
+                        <td>{{ document.document_id }}</td>
+                        <td>{{ document.pdf_file_name }}</td>
+                        <td>{{ document.company_name or "N/A" }}</td>
+                        <td>
+                            <div class="memo-actions">
+                                <select class="llm-provider-select" id="provider-{{ document.document_id }}">
+                                    <option value="google">Google Gemini</option>
+                                    <option value="openai">OpenAI GPT</option>
+                                </select>
+                                <a href="/financial-data/{{ document.document_id }}" class="btn primary">View Financial Data</a>
+                                <button class="btn primary generate-memo" data-id="{{ document.document_id }}">Generate Memo</button>
+                                <button class="btn primary compare-llms" data-id="{{ document.document_id }}">Compare LLMs</button>
+                                <button class="btn secondary delete-document" data-id="{{ document.document_id }}">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>No documents found. <a href="/upload">Upload a document</a> to get started.</p>
+        </div>
+        {% endif %}
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Credit Lense. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', path='/js/main.js') }}"></script>
+</body>
+</html>

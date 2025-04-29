@@ -1,0 +1,8 @@
+Copyright (c) [2025] [Ruslan V. Taran]
+All Rights Reserved
+
+This software is the confidential and proprietary information of Ruslan V. Taran.
+You shall not disclose such confidential information and shall use it only in accordance
+with the terms of the license agreement you entered into with Ruslan V. Taran.
+
+Unauthorized copying, modification, distribution, or use of this software is strictly prohibited.

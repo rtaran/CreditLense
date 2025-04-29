@@ -4,8 +4,8 @@ echo "🚀 Starting FastAPI server..."
 if command -v uv &> /dev/null
 then
     echo "✅ Using uv environment"
-    uv run uvicorn app.main:app --reload --port 5000
+    uv run uvicorn app.main:app --reload --port 5001
 else
     echo "⚠️ uv not found, using system Python environment"
-    uvicorn app.main:app --reload --port 5000
+    uvicorn app.main:app --reload --port 5001
 fi
