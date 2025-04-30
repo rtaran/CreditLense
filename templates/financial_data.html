@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Data - Credit Lense</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <link rel="icon" href="{{ url_for('static', path='/favicon.ico') }}">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Credit Lense</h1>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/documents">Documents</a></li>
+                    <li><a href="/memos">Memos</a></li>
+                    <li><a href="/upload">Upload</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <h2>Financial Data for {{ document.company_name or "Unknown Company" }}</h2>
+        <p>Document: {{ document.pdf_file_name }}</p>
+
+        {% if not financial_data.years %}
+            <div class="empty-state">
+                <p>No financial data has been extracted for this document yet. This may take a few moments after upload.</p>
+                <p><a href="/documents">Return to Documents</a></p>
+            </div>
+        {% else %}
+            <div class="financial-data-container">
+                <div class="years-selector">
+                    <h3>Select Year:</h3>
+                    <div class="year-tabs">
+                        {% for year in financial_data.years %}
+                            <button class="year-tab {% if year == selected_year %}active{% endif %}" 
+                                    onclick="showYear('{{ year }}')">{{ year }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {% for year in financial_data.years %}
+                    <div id="year-{{ year }}" class="year-data {% if year != selected_year %}hidden{% endif %}">
+                        <h3>Financial Data for {{ year }}</h3>
+                        
+                        <!-- Balance Sheet -->
+                        {% if year in financial_data.balance_sheet %}
+                            <div class="data-section">
+                                <h4>Balance Sheet</h4>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Category</th>
+                                            <th>Item</th>
+                                            <th>Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for category, items in financial_data.balance_sheet[year].items() %}
+                                            {% for item_name, item_value in items.items() %}
+                                                {% if item_value is not none %}
+                                                    <tr>
+                                                        <td>{{ category }}</td>
+                                                        <td>{{ item_name }}</td>
+                                                        <td class="numeric">{{ "{:,.2f}".format(item_value) }}</td>
+                                                    </tr>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+                        
+                        <!-- Income Statement -->
+                        {% if year in financial_data.income_statement %}
+                            <div class="data-section">
+                                <h4>Income Statement</h4>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Category</th>
+                                            <th>Item</th>
+                                            <th>Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for category, items in financial_data.income_statement[year].items() %}
+                                            {% for item_name, item_value in items.items() %}
+                                                {% if item_value is not none %}
+                                                    <tr>
+                                                        <td>{{ category }}</td>
+                                                        <td>{{ item_name }}</td>
+                                                        <td class="numeric">{{ "{:,.2f}".format(item_value) }}</td>
+                                                    </tr>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+                        
+                        <!-- Cash Flow -->
+                        {% if year in financial_data.cash_flow %}
+                            <div class="data-section">
+                                <h4>Cash Flow</h4>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Category</th>
+                                            <th>Item</th>
+                                            <th>Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for category, items in financial_data.cash_flow[year].items() %}
+                                            {% for item_name, item_value in items.items() %}
+                                                {% if item_value is not none %}
+                                                    <tr>
+                                                        <td>{{ category }}</td>
+                                                        <td>{{ item_name }}</td>
+                                                        <td class="numeric">{{ "{:,.2f}".format(item_value) }}</td>
+                                                    </tr>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+                        
+                        <!-- Financial Ratios -->
+                        {% if year in financial_data.ratios %}
+                            <div class="data-section">
+                                <h4>Financial Ratios</h4>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Category</th>
+                                            <th>Ratio</th>
+                                            <th>Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for category, items in financial_data.ratios[year].items() %}
+                                            {% for ratio_name, ratio_value in items.items() %}
+                                                {% if ratio_value is not none %}
+                                                    <tr>
+                                                        <td>{{ category }}</td>
+                                                        <td>{{ ratio_name }}</td>
+                                                        <td class="numeric">{{ "{:.2f}".format(ratio_value) }}</td>
+                                                    </tr>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+            
+            <div class="actions">
+                <a href="/documents" class="btn secondary">Back to Documents</a>
+                <a href="/generate-memo/{{ document.document_id }}" class="btn primary">Generate Memo</a>
+            </div>
+        {% endif %}
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Credit Lense. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        function showYear(year) {
+            // Hide all year data
+            const yearDivs = document.querySelectorAll('.year-data');
+            yearDivs.forEach(div => {
+                div.classList.add('hidden');
+            });
+            
+            // Show the selected year data
+            const selectedYearDiv = document.getElementById(`year-${year}`);
+            if (selectedYearDiv) {
+                selectedYearDiv.classList.remove('hidden');
+            }
+            
+            // Update active tab
+            const yearTabs = document.querySelectorAll('.year-tab');
+            yearTabs.forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            const selectedTab = document.querySelector(`.year-tab[onclick="showYear('${year}')"]`);
+            if (selectedTab) {
+                selectedTab.classList.add('active');
+            }
+        }
+    </script>
+
+    <style>
+        .financial-data-container {
+            margin-top: 2rem;
+        }
+        
+        .years-selector {
+            margin-bottom: 1.5rem;
+        }
+        
+        .year-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .year-tab {
+            padding: 0.5rem 1rem;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .year-tab.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
+        .year-data {
+            margin-bottom: 2rem;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .data-section {
+            margin-bottom: 2rem;
+        }
+        
+        .data-section h4 {
+            margin-bottom: 0.5rem;
+            color: var(--secondary-color);
+        }
+        
+        .numeric {
+            text-align: right;
+            font-family: monospace;
+        }
+        
+        .actions {
+            margin-top: 2rem;
+            display: flex;
+            gap: 1rem;
+        }
+    </style>
+</body>
+</html>

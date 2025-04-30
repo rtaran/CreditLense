@@ -4,10 +4,9 @@
 # temp file while working and testing the code
 _working_files
 
-
 # Ignore only the DB file
 /database/financial_data.db
-/database/*
+#/database/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -32,3 +31,16 @@ __pypackages__/
 
 # feedback from Phillip
 Phillip's feedback
+
+# Test databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Test output
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Local test configs
+tests/local_config.py
