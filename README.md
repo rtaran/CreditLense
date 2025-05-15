@@ -56,11 +56,26 @@ A web-based application that allows clients to upload a **PDF financial statemen
 │   ├── formatter.py              # Generates .docx memo
 │   └── llm_service.py            # LLM service (OpenAI/Gemini)
 │
-├── templates/                    # Jinja2 HTML templates
-│   ├── index.html                # Home page
-│   ├── upload.html               # Document upload page
-│   ├── documents.html            # Document management page
-│   └── memos.html                # Memo management page
+├── config/                       # Configuration files
+│   ├── .env.template             # Example environment file
+│   └── pytest.ini                # PyTest configuration
+│
+├── data/                         # Data storage
+│   ├── database/                 # Database files
+│   │   └── financial_data.db     # SQLite database
+│   ├── output/                   # Generated memos
+│   └── uploads/                  # Uploaded files
+│
+├── docs/                         # Documentation
+│   └── next.md                   # Future development plans
+│
+├── documents/                    # Sample documents
+│   ├── company/
+│   └── methodology/
+│
+├── scripts/                      # Shell scripts
+│   ├── run.sh                    # Script to run the app
+│   └── run_tests.sh              # Script to run tests
 │
 ├── static/                       # Static assets
 │   ├── css/
@@ -69,19 +84,19 @@ A web-based application that allows clients to upload a **PDF financial statemen
 │   │   └── main.js               # JavaScript for interactivity
 │   └── favicon.ico               # Site favicon
 │
-├── database/
-│   └── financial_data.db         # SQLite database
+├── templates/                    # Jinja2 HTML templates
+│   ├── index.html                # Home page
+│   ├── upload.html               # Document upload page
+│   ├── documents.html            # Document management page
+│   └── memos.html                # Memo management page
 │
-├── documents/                    # Sample documents
-│   ├── company/
-│   └── methodology/
+├── tests/                        # Test files
+│   ├── integration/              # Integration tests
+│   └── unit/                     # Unit tests
 │
-├── output/                       # Generated memos
-│
-├── run.sh                        # Script to run the app
 ├── pyproject.toml                # Python dependency and tool config (uv)
-├── .env.template                 # Example environment file
-└── README.md
+├── .env                          # Environment variables (not in version control)
+└── README.md                     # Project documentation
 
 ---
 
@@ -94,15 +109,17 @@ pip install uv
 uv init
 uv sync
 uv lock
-./run.sh
+cp config/.env.template .env  # Create .env file from template
+# Edit .env file to add your API keys
+./scripts/run.sh
 ```
 
-⚠️ Make sure the `.env` file exists in the root directory. You can use the included `.env.template` as a starting point.
+⚠️ Make sure the `.env` file exists in the root directory. You can use the included `config/.env.template` as a starting point.
 
 OPENAI_API_KEY=your_openai_key
 GOOGLE_API_KEY=your_google_key
-DATABASE_URL=sqlite:///./database/financial_data.db
-UPLOAD_FOLDER=./output
+DATABASE_URL=sqlite:///./data/database/financial_data.db
+UPLOAD_FOLDER=./data/uploads
 LLM_PROVIDER=google  # or openai
 
 🧾 Output Example
@@ -125,7 +142,7 @@ The application includes a comprehensive test suite covering both unit tests and
 To run the tests, use the provided script:
 
 ```bash
-./run_tests.sh
+./scripts/run_tests.sh
 ```
 
 This will run all tests and generate a coverage report in the `test_reports/coverage` directory.

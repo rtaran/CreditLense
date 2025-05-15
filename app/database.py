@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Get DATABASE_URL from environment or use default
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./database/financial_data.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/database/financial_data.db")
 
 engine = create_engine(
     DATABASE_URL, connect_args={"check_same_thread": False}

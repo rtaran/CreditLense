@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Memo - Credit Lense</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <link rel="icon" href="{{ url_for('static', path='/favicon.ico') }}">
+    <style>
+        .memo-content {
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+            white-space: pre-wrap;
+            font-family: 'Times New Roman', Times, serif;
+            line-height: 1.6;
+        }
+        
+        .memo-header {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .memo-header h3 {
+            margin-bottom: 0.5rem;
+        }
+        
+        .memo-header p {
+            color: #666;
+            margin-bottom: 0.25rem;
+        }
+        
+        .memo-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        @media print {
+            header, footer, .actions, .memo-actions {
+                display: none;
+            }
+            
+            body, .container, .memo-content {
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+            
+            .memo-content {
+                font-size: 12pt;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Credit Lense</h1>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/documents">Documents</a></li>
+                    <li><a href="/memos" class="active">Memos</a></li>
+                    <li><a href="/upload">Upload</a></li>
+                    <li><a href="/methodology">Methodology</a></li>
+                    <li><a href="/memo-format">Memo Format</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="actions">
+            <a href="/memos" class="btn secondary">Back to Memos</a>
+            <button onclick="window.print()" class="btn primary">Print Memo</button>
+        </div>
+
+        <div class="memo-header">
+            <h2>Credit Memo</h2>
+            <p><strong>Document ID:</strong> {{ memo.document_id }}</p>
+            <p><strong>Company:</strong> {{ company_name }}</p>
+            <p><strong>LLM Provider:</strong> {{ memo.llm_provider|capitalize if memo.llm_provider else "Default" }}</p>
+        </div>
+
+        <div class="memo-content">
+            {{ memo.memo_string }}
+        </div>
+
+        <div class="memo-actions">
+            <a href="/download-memo/{{ memo.memo_id }}" class="btn primary">Download as Word</a>
+            <a href="/memos" class="btn secondary">Back to Memos</a>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Credit Lense. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>

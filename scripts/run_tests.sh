@@ -2,8 +2,8 @@
 
 echo "🧪 Running Credit Lense tests..."
 
-# Change to the parent directory
-cd ..
+# No need to change directory when running from project root
+# cd ..
 
 # Check if dependencies are installed
 echo "📦 Checking dependencies..."

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Methodology Files - Credit Lense</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <link rel="icon" href="{{ url_for('static', path='/favicon.ico') }}">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Credit Lense</h1>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/documents">Documents</a></li>
+                    <li><a href="/memos">Memos</a></li>
+                    <li><a href="/upload">Upload</a></li>
+                    <li><a href="/methodology" class="active">Methodology</a></li>
+                    <li><a href="/memo-format">Memo Format</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <h2>Methodology Files</h2>
+        <p>Upload and manage methodology files for credit analysis.</p>
+
+        <div class="actions">
+            <button id="upload-methodology-btn" class="btn primary">Upload New Methodology</button>
+        </div>
+
+        <div id="upload-methodology-form" class="form-container" style="display: none;">
+            <h3>Upload Methodology File</h3>
+            <form id="methodology-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="methodology-file">Select File</label>
+                    <input type="file" id="methodology-file" name="file" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="methodology-name">Name</label>
+                    <input type="text" id="methodology-name" name="name" placeholder="Enter methodology name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="methodology-description">Description (Optional)</label>
+                    <textarea id="methodology-description" name="description" placeholder="Enter description"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn primary">Upload</button>
+                    <button type="button" class="btn secondary" id="cancel-methodology-upload">Cancel</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="methodology-list-container" class="table-container">
+            <table id="methodology-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>File Name</th>
+                        <th>Description</th>
+                        <th>Uploaded</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="methodology-list">
+                    <!-- Methodology items will be loaded here -->
+                </tbody>
+            </table>
+        </div>
+
+        <div id="empty-methodology" class="empty-state" style="display: none;">
+            <p>No methodology files found. Upload a methodology file to get started.</p>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Credit Lense. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Show/hide upload form
+            const uploadBtn = document.getElementById('upload-methodology-btn');
+            const uploadForm = document.getElementById('upload-methodology-form');
+            const cancelBtn = document.getElementById('cancel-methodology-upload');
+            const methodologyTable = document.getElementById('methodology-table');
+            const emptyState = document.getElementById('empty-methodology');
+            const methodologyList = document.getElementById('methodology-list');
+            
+            uploadBtn.addEventListener('click', function() {
+                uploadForm.style.display = 'block';
+                uploadBtn.style.display = 'none';
+            });
+            
+            cancelBtn.addEventListener('click', function() {
+                uploadForm.style.display = 'none';
+                uploadBtn.style.display = 'inline-block';
+                document.getElementById('methodology-form').reset();
+            });
+            
+            // Load methodology files
+            loadMethodologies();
+            
+            // Handle form submission
+            document.getElementById('methodology-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData();
+                const fileInput = document.getElementById('methodology-file');
+                const nameInput = document.getElementById('methodology-name');
+                const descriptionInput = document.getElementById('methodology-description');
+                
+                formData.append('file', fileInput.files[0]);
+                formData.append('name', nameInput.value);
+                
+                if (descriptionInput.value) {
+                    formData.append('description', descriptionInput.value);
+                }
+                
+                fetch('/methodology/', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to upload methodology');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    alert('Methodology uploaded successfully!');
+                    uploadForm.style.display = 'none';
+                    uploadBtn.style.display = 'inline-block';
+                    document.getElementById('methodology-form').reset();
+                    loadMethodologies();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error uploading methodology: ' + error.message);
+                });
+            });
+            
+            function loadMethodologies() {
+                fetch('/methodology/')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to load methodologies');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.length === 0) {
+                        methodologyTable.style.display = 'none';
+                        emptyState.style.display = 'block';
+                    } else {
+                        methodologyTable.style.display = 'table';
+                        emptyState.style.display = 'none';
+                        
+                        // Clear existing rows
+                        methodologyList.innerHTML = '';
+                        
+                        // Add rows for each methodology
+                        data.forEach(methodology => {
+                            const row = document.createElement('tr');
+                            
+                            // Format date
+                            const uploadDate = new Date(methodology.uploaded_at);
+                            const formattedDate = uploadDate.toLocaleDateString() + ' ' + uploadDate.toLocaleTimeString();
+                            
+                            row.innerHTML = `
+                                <td>${methodology.methodology_id}</td>
+                                <td>${methodology.name}</td>
+                                <td>${methodology.file_name}</td>
+                                <td>${methodology.description || ''}</td>
+                                <td>${formattedDate}</td>
+                                <td>
+                                    <a href="/download-methodology/${methodology.methodology_id}" class="btn primary">Download</a>
+                                    <button class="btn secondary delete-methodology" data-id="${methodology.methodology_id}">Delete</button>
+                                </td>
+                            `;
+                            
+                            methodologyList.appendChild(row);
+                        });
+                        
+                        // Add event listeners for delete buttons
+                        document.querySelectorAll('.delete-methodology').forEach(button => {
+                            button.addEventListener('click', function() {
+                                const id = this.getAttribute('data-id');
+                                if (confirm('Are you sure you want to delete this methodology?')) {
+                                    deleteMethodology(id);
+                                }
+                            });
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error loading methodologies: ' + error.message);
+                });
+            }
+            
+            function deleteMethodology(id) {
+                fetch(`/methodology/${id}`, {
+                    method: 'DELETE'
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to delete methodology');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    alert('Methodology deleted successfully!');
+                    loadMethodologies();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error deleting methodology: ' + error.message);
+                });
+            }
+        });
+    </script>
+</body>
+</html>

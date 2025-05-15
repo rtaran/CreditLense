@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, Text, Date, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, Float, Text, Date, ForeignKey, Table, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -98,3 +99,26 @@ class FinancialMemo(Base):
 
     # Relationship
     company = relationship("CompanyData", back_populates="memos")
+
+class Methodology(Base):
+    __tablename__ = "methodologies"
+
+    methodology_id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    file_name = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    content = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Integer, default=1)  # 1 = active, 0 = inactive
+
+class MemoFormat(Base):
+    __tablename__ = "memo_formats"
+
+    format_id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    file_name = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Integer, default=1)  # 1 = active, 0 = inactive

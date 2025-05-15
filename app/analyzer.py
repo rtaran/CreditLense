@@ -2,7 +2,12 @@ from app.llm_service import llm_service
 from app.financial_data import get_financial_data_for_document
 from sqlalchemy.orm import Session
 import json
+import logging
 from typing import Dict, Any, Optional
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class FinancialAnalyzer:
     """
@@ -26,16 +31,41 @@ class FinancialAnalyzer:
         Returns:
             A credit memo as text
         """
+        logger.info(f"Analyzing financial document {document_id or 'unknown'} with provider {provider or 'default'}")
+
         # Get extracted financial data if document_id and db are provided
         financial_data = None
         if document_id is not None and db is not None:
-            financial_data = get_financial_data_for_document(db, document_id)
+            logger.info(f"Retrieving extracted financial data for document {document_id}")
+            try:
+                financial_data = get_financial_data_for_document(db, document_id)
+                if financial_data:
+                    logger.info(f"Retrieved financial data for document {document_id} with {len(financial_data.get('years', []))} years of data")
+                else:
+                    logger.warning(f"No financial data found for document {document_id}")
+            except Exception as e:
+                logger.error(f"Error retrieving financial data for document {document_id}: {str(e)}")
+                # Continue without financial data
+        else:
+            logger.info("No document_id or db provided, proceeding without extracted financial data")
 
         # Create a prompt for the LLM
-        prompt = self._create_analysis_prompt(document_text, financial_data)
+        logger.info("Creating analysis prompt")
+        try:
+            prompt = self._create_analysis_prompt(document_text, financial_data)
+            logger.debug(f"Created prompt with length {len(prompt)} characters")
+        except Exception as e:
+            logger.error(f"Error creating analysis prompt: {str(e)}")
+            raise
 
         # Generate the credit memo using the LLM service with the specified provider
-        memo = llm_service.generate_text(prompt, provider=provider)
+        logger.info(f"Generating credit memo using {provider or 'default'} provider")
+        try:
+            memo = llm_service.generate_text(prompt, provider=provider)
+            logger.info(f"Successfully generated credit memo with length {len(memo)} characters")
+        except Exception as e:
+            logger.error(f"Error generating credit memo: {str(e)}")
+            raise
 
         return memo
 
@@ -50,11 +80,20 @@ class FinancialAnalyzer:
         Returns:
             A prompt for the LLM
         """
+        logger.debug("Creating analysis prompt")
+
         # Limit the document text to avoid exceeding token limits
         max_doc_length = 8000  # Reduced to make room for financial data
+        original_length = len(document_text)
         truncated_text = document_text[:max_doc_length]
 
+        if original_length > max_doc_length:
+            logger.info(f"Document text truncated from {original_length} to {max_doc_length} characters")
+        else:
+            logger.debug(f"Document text length ({original_length} characters) is within limits")
+
         # Base prompt
+        logger.debug("Creating base prompt")
         prompt = f"""
         You are a professional financial analyst tasked with creating a credit memo based on the following financial document.
 
@@ -64,16 +103,20 @@ class FinancialAnalyzer:
 
         # Add extracted financial data if available
         if financial_data and financial_data.get("years"):
+            logger.info("Adding extracted financial data to prompt")
+
             # Format the financial data as a structured section
             prompt += "\n\nEXTRACTED FINANCIAL DATA:\n"
 
             # Add years
             years = financial_data.get("years", [])
+            logger.debug(f"Financial data years: {years}")
             prompt += f"Years: {', '.join(map(str, years))}\n\n"
 
             # Add the most recent year's data
             if years:
                 latest_year = max(years)
+                logger.info(f"Using most recent year ({latest_year}) for financial data")
                 prompt += f"Data for {latest_year}:\n"
 
                 # Add balance sheet summary
@@ -155,6 +198,7 @@ class FinancialAnalyzer:
                                 prompt += f"- {ratio_name}: {ratio_value}\n"
 
         # Add instructions for the memo
+        logger.debug("Adding memo instructions to prompt")
         prompt += """
 
         Please analyze this document and create a comprehensive credit memo that includes:
@@ -168,6 +212,9 @@ class FinancialAnalyzer:
         Format your response as a well-structured credit memo that could be presented to a credit committee.
         Use the extracted financial data provided above to enhance your analysis, but also incorporate any additional insights from the document text.
         """
+
+        final_prompt_length = len(prompt)
+        logger.info(f"Analysis prompt created successfully with total length of {final_prompt_length} characters")
 
         return prompt
 

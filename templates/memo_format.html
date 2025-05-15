@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memo Format Files - Credit Lense</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <link rel="icon" href="{{ url_for('static', path='/favicon.ico') }}">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Credit Lense</h1>
+            <nav>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="/documents">Documents</a></li>
+                    <li><a href="/memos">Memos</a></li>
+                    <li><a href="/upload">Upload</a></li>
+                    <li><a href="/methodology">Methodology</a></li>
+                    <li><a href="/memo-format" class="active">Memo Format</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <h2>Memo Format Files</h2>
+        <p>Upload and manage memo format files for credit memos.</p>
+
+        <div class="actions">
+            <button id="upload-format-btn" class="btn primary">Upload New Format</button>
+        </div>
+
+        <div id="upload-format-form" class="form-container" style="display: none;">
+            <h3>Upload Memo Format File</h3>
+            <form id="format-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="format-file">Select File</label>
+                    <input type="file" id="format-file" name="file" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="format-name">Name</label>
+                    <input type="text" id="format-name" name="name" placeholder="Enter format name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="format-description">Description (Optional)</label>
+                    <textarea id="format-description" name="description" placeholder="Enter description"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn primary">Upload</button>
+                    <button type="button" class="btn secondary" id="cancel-format-upload">Cancel</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="format-list-container" class="table-container">
+            <table id="format-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>File Name</th>
+                        <th>Description</th>
+                        <th>Uploaded</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="format-list">
+                    <!-- Format items will be loaded here -->
+                </tbody>
+            </table>
+        </div>
+
+        <div id="empty-format" class="empty-state" style="display: none;">
+            <p>No memo format files found. Upload a memo format file to get started.</p>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 Credit Lense. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Show/hide upload form
+            const uploadBtn = document.getElementById('upload-format-btn');
+            const uploadForm = document.getElementById('upload-format-form');
+            const cancelBtn = document.getElementById('cancel-format-upload');
+            const formatTable = document.getElementById('format-table');
+            const emptyState = document.getElementById('empty-format');
+            const formatList = document.getElementById('format-list');
+            
+            uploadBtn.addEventListener('click', function() {
+                uploadForm.style.display = 'block';
+                uploadBtn.style.display = 'none';
+            });
+            
+            cancelBtn.addEventListener('click', function() {
+                uploadForm.style.display = 'none';
+                uploadBtn.style.display = 'inline-block';
+                document.getElementById('format-form').reset();
+            });
+            
+            // Load memo format files
+            loadFormats();
+            
+            // Handle form submission
+            document.getElementById('format-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData();
+                const fileInput = document.getElementById('format-file');
+                const nameInput = document.getElementById('format-name');
+                const descriptionInput = document.getElementById('format-description');
+                
+                formData.append('file', fileInput.files[0]);
+                formData.append('name', nameInput.value);
+                
+                if (descriptionInput.value) {
+                    formData.append('description', descriptionInput.value);
+                }
+                
+                fetch('/memo-format/', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to upload memo format');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    alert('Memo format uploaded successfully!');
+                    uploadForm.style.display = 'none';
+                    uploadBtn.style.display = 'inline-block';
+                    document.getElementById('format-form').reset();
+                    loadFormats();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error uploading memo format: ' + error.message);
+                });
+            });
+            
+            function loadFormats() {
+                fetch('/memo-format/')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to load memo formats');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.length === 0) {
+                        formatTable.style.display = 'none';
+                        emptyState.style.display = 'block';
+                    } else {
+                        formatTable.style.display = 'table';
+                        emptyState.style.display = 'none';
+                        
+                        // Clear existing rows
+                        formatList.innerHTML = '';
+                        
+                        // Add rows for each memo format
+                        data.forEach(format => {
+                            const row = document.createElement('tr');
+                            
+                            // Format date
+                            const uploadDate = new Date(format.uploaded_at);
+                            const formattedDate = uploadDate.toLocaleDateString() + ' ' + uploadDate.toLocaleTimeString();
+                            
+                            row.innerHTML = `
+                                <td>${format.format_id}</td>
+                                <td>${format.name}</td>
+                                <td>${format.file_name}</td>
+                                <td>${format.description || ''}</td>
+                                <td>${formattedDate}</td>
+                                <td>
+                                    <a href="/download-memo-format/${format.format_id}" class="btn primary">Download</a>
+                                    <button class="btn secondary delete-format" data-id="${format.format_id}">Delete</button>
+                                </td>
+                            `;
+                            
+                            formatList.appendChild(row);
+                        });
+                        
+                        // Add event listeners for delete buttons
+                        document.querySelectorAll('.delete-format').forEach(button => {
+                            button.addEventListener('click', function() {
+                                const id = this.getAttribute('data-id');
+                                if (confirm('Are you sure you want to delete this memo format?')) {
+                                    deleteFormat(id);
+                                }
+                            });
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error loading memo formats: ' + error.message);
+                });
+            }
+            
+            function deleteFormat(id) {
+                fetch(`/memo-format/${id}`, {
+                    method: 'DELETE'
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to delete memo format');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    alert('Memo format deleted successfully!');
+                    loadFormats();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error deleting memo format: ' + error.message);
+                });
+            }
+        });
+    </script>
+</body>
+</html>

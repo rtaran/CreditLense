@@ -1,9 +1,6 @@
 # Environment variables
 .env
 
-# temp file while working and testing the code
-_working_files
-
 # Ignore only the DB file
 /database/financial_data.db
 #/database/*
@@ -28,9 +25,6 @@ __pypackages__/
 
 # MacOS
 .DS_Store
-
-# feedback from Phillip
-Phillip's feedback
 
 # Test databases
 *.db

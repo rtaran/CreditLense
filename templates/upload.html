@@ -17,6 +17,8 @@
                     <li><a href="/documents">Documents</a></li>
                     <li><a href="/memos">Memos</a></li>
                     <li><a href="/upload" class="active">Upload</a></li>
+                    <li><a href="/methodology">Methodology</a></li>
+                    <li><a href="/memo-format">Memo Format</a></li>
                 </ul>
             </nav>
         </div>
@@ -26,18 +28,18 @@
         <section class="form-container">
             <h2>Upload Financial Document</h2>
             <p>Upload a PDF financial document to analyze and generate memos.</p>
-            
+
             <form id="upload-form" action="/documents/" method="post" enctype="multipart/form-data">
                 <div class="form-group">
                     <label for="file-input">Select PDF File</label>
                     <input type="file" id="file-input" name="file" accept=".pdf">
                 </div>
-                
+
                 <div class="form-group">
                     <label for="company-name">Company Name (Optional)</label>
                     <input type="text" id="company-name" name="company_name" placeholder="Enter company name">
                 </div>
-                
+
                 <button type="submit" class="btn primary">Upload Document</button>
             </form>
         </section>

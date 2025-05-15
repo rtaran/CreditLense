@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from app.models import CompanyData
 from app.database import SessionLocal
@@ -46,7 +46,7 @@ def extract_text_from_pdf(file: UploadFile) -> str:
         return text
     except Exception as e:
         logger.error(f"Error extracting text from PDF: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"Error processing PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
     finally:
         # Clean up the temporary file
         if os.path.exists(tmp_path):
@@ -86,14 +86,24 @@ def process_financial_data(db: Session, document_id: int, pdf_text: str):
                     current_assets = balance_sheet["Current Assets"]["Total Current Assets"]
                     if "Non-Current Assets" in balance_sheet and "Total Non-Current Assets" in balance_sheet["Non-Current Assets"]:
                         non_current_assets = balance_sheet["Non-Current Assets"]["Total Non-Current Assets"]
-                        document.total_assets = current_assets + non_current_assets
+                        if current_assets is not None and non_current_assets is not None:
+                            document.total_assets = current_assets + non_current_assets
+                        elif current_assets is not None:
+                            document.total_assets = current_assets
+                        elif non_current_assets is not None:
+                            document.total_assets = non_current_assets
 
                 # Extract total liabilities if available
                 if "Current Liabilities" in balance_sheet and "Total Current Liabilities" in balance_sheet["Current Liabilities"]:
                     current_liabilities = balance_sheet["Current Liabilities"]["Total Current Liabilities"]
                     if "Non-Current Liabilities" in balance_sheet and "Total Non-Current Liabilities" in balance_sheet["Non-Current Liabilities"]:
                         non_current_liabilities = balance_sheet["Non-Current Liabilities"]["Total Non-Current Liabilities"]
-                        document.total_liabilities = current_liabilities + non_current_liabilities
+                        if current_liabilities is not None and non_current_liabilities is not None:
+                            document.total_liabilities = current_liabilities + non_current_liabilities
+                        elif current_liabilities is not None:
+                            document.total_liabilities = current_liabilities
+                        elif non_current_liabilities is not None:
+                            document.total_liabilities = non_current_liabilities
 
             # Extract revenue and net income if available
             if latest_year in financial_data["income_statement"]:
@@ -124,7 +134,8 @@ async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...), 
     company_name: str = Form(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None
 ):
     """
     Upload a financial document and process it.
@@ -134,47 +145,85 @@ async def upload_document(
         file: The uploaded PDF file
         company_name: The name of the company (optional)
         db: The database session
+        request: The request object
 
     Returns:
         Information about the uploaded document
     """
-    # Extract text from the PDF
-    pdf_text = extract_text_from_pdf(file)
+    client_host = request.client.host if request else "unknown"
+    logger.info(f"POST /documents/ - Request from {client_host} to upload file: {file.filename}")
 
-    # Create a new CompanyData record
-    doc = CompanyData(
-        pdf_file_name=file.filename, 
-        pdf_string=pdf_text,
-        company_name=company_name
-    )
-    db.add(doc)
-    db.commit()
-    db.refresh(doc)
+    try:
+        # Extract text from the PDF
+        logger.info(f"Extracting text from PDF: {file.filename}")
+        pdf_text = extract_text_from_pdf(file)
+        logger.info(f"Successfully extracted {len(pdf_text)} characters from PDF")
 
-    # Process financial data in the background
-    background_tasks.add_task(
-        process_financial_data,
-        db=db,
-        document_id=doc.document_id,
-        pdf_text=pdf_text
-    )
+        # Create a new CompanyData record
+        logger.info(f"Creating new CompanyData record for {company_name or 'unnamed company'}")
+        doc = CompanyData(
+            pdf_file_name=file.filename, 
+            pdf_string=pdf_text,
+            company_name=company_name
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+        logger.info(f"Created document record with ID: {doc.document_id}")
 
-    return {
-        "document_id": doc.document_id,
-        "filename": doc.pdf_file_name,
-        "company_name": doc.company_name,
-        "message": "Document uploaded successfully! Financial data is being processed in the background."
-    }
+        # Process financial data in the background
+        logger.info(f"Starting background task to process financial data for document {doc.document_id}")
+        background_tasks.add_task(
+            process_financial_data,
+            db=db,
+            document_id=doc.document_id,
+            pdf_text=pdf_text
+        )
+
+        logger.info(f"Document upload completed successfully for document {doc.document_id}")
+        return {
+            "document_id": doc.document_id,
+            "filename": doc.pdf_file_name,
+            "company_name": doc.company_name,
+            "message": "Document uploaded successfully!"
+        }
+    except Exception as e:
+        logger.error(f"Error uploading document: {str(e)}")
+        raise
 
 @router.get("/documents/")
-def list_documents(db: Session = Depends(get_db)):
-    return db.query(CompanyData).all()
+def list_documents(db: Session = Depends(get_db), request: Request = None):
+    client_host = request.client.host if request else "unknown"
+    logger.info(f"GET /documents/ - Request from {client_host}")
+
+    try:
+        documents = db.query(CompanyData).all()
+        logger.info(f"GET /documents/ - Returning {len(documents)} documents")
+        return documents
+    except Exception as e:
+        logger.error(f"Error retrieving documents: {str(e)}")
+        raise
 
 @router.delete("/documents/{document_id}")
-def delete_document(document_id: int, db: Session = Depends(get_db)):
-    doc = db.query(CompanyData).get(document_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
-    db.delete(doc)
-    db.commit()
-    return {"message": f"Document {document_id} deleted successfully."}
+def delete_document(document_id: int, db: Session = Depends(get_db), request: Request = None):
+    client_host = request.client.host if request else "unknown"
+    logger.info(f"DELETE /documents/{document_id} - Request from {client_host}")
+
+    try:
+        doc = db.query(CompanyData).get(document_id)
+        if not doc:
+            logger.warning(f"DELETE /documents/{document_id} - Document not found")
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        logger.info(f"DELETE /documents/{document_id} - Deleting document: {doc.pdf_file_name}")
+        db.delete(doc)
+        db.commit()
+        logger.info(f"DELETE /documents/{document_id} - Document deleted successfully")
+
+        return {"message": f"Document {document_id} deleted successfully."}
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 404)
+        raise
+    except Exception as e:
+        logger.error(f"DELETE /documents/{document_id} - Error deleting document: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting document: {str(e)}")
