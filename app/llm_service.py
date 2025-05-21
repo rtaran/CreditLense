@@ -16,11 +16,20 @@ class LLMService:
 
     def __init__(self):
         """Initialize the LLM service based on environment configuration."""
-        self.provider = os.getenv("LLM_PROVIDER", "google").lower()
-        logger.info(f"Initializing LLM service with provider: {self.provider}")
+        providers_str = os.getenv("LLM_PROVIDER", "google").lower()
+        self.available_providers = [p.strip() for p in providers_str.split(",") if p.strip()]
+
+        # If no providers are specified, default to Google
+        if not self.available_providers:
+            self.available_providers = ["google"]
+
+        self.provider = self.available_providers[0]
+
+        logger.info(f"Initializing LLM service with available providers: {self.available_providers}")
+        logger.info(f"Default provider: {self.provider}")
 
         # Initialize OpenAI if needed
-        if self.provider == "openai":
+        if "openai" in self.available_providers:
             logger.info("Configuring OpenAI provider")
             openai_api_key = os.getenv("OPENAI_API_KEY")
             if not openai_api_key:
@@ -30,7 +39,7 @@ class LLMService:
             logger.info("OpenAI provider configured successfully")
 
         # Initialize Google Gemini if needed
-        elif self.provider == "google":
+        if "google" in self.available_providers:
             logger.info("Configuring Google Gemini provider")
             google_api_key = os.getenv("GOOGLE_API_KEY")
             if not google_api_key:
@@ -39,9 +48,10 @@ class LLMService:
             genai.configure(api_key=google_api_key)
             logger.info("Google Gemini provider configured successfully")
 
-        else:
-            logger.error(f"Unsupported LLM provider: {self.provider}")
-            raise ValueError(f"Unsupported LLM provider: {self.provider}. Use 'openai' or 'google'.")
+        # Validate that at least one provider is available
+        if not self.available_providers:
+            logger.error("No LLM providers configured")
+            raise ValueError("No LLM providers configured. Use 'openai' or 'google'.")
 
     def generate_text(self, prompt: str, max_tokens: Optional[int] = None, provider: Optional[str] = None) -> str:
         """
@@ -57,6 +67,11 @@ class LLMService:
         """
         # Use the specified provider if provided, otherwise use the configured provider
         active_provider = provider.lower() if provider else self.provider
+
+        # Check if the provider is in the available providers list
+        if active_provider not in self.available_providers:
+            logger.warning(f"Requested provider '{active_provider}' is not in available providers list. Using default provider '{self.provider}' instead.")
+            active_provider = self.provider
 
         # Log prompt length instead of full prompt for privacy and to avoid huge log files
         prompt_length = len(prompt)
@@ -87,9 +102,9 @@ class LLMService:
                 logger.debug("Using new OpenAI client API")
                 from openai import OpenAI
                 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-                logger.info("Sending request to OpenAI API (gpt-3.5-turbo)")
+                logger.info("Sending request to OpenAI API (gpt-4o-mini)")
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": "You are a helpful financial analyst assistant."},
                         {"role": "user", "content": prompt}
@@ -101,9 +116,9 @@ class LLMService:
             except ImportError:
                 # Fall back to legacy API if the new client is not available
                 logger.info("New OpenAI client not available, falling back to legacy API")
-                logger.info("Sending request to OpenAI API (legacy, gpt-3.5-turbo)")
+                logger.info("Sending request to OpenAI API (legacy, gpt-4o-mini)")
                 response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": "You are a helpful financial analyst assistant."},
                         {"role": "user", "content": prompt}

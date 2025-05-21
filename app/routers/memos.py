@@ -221,6 +221,13 @@ def _generate_and_save_memo(document_id: int, document_text: str, company_name: 
     """
     logger.info(f"Background task: Generating memo for document {document_id} using {provider or 'default'} provider")
 
+    # Create a new database session if one isn't provided
+    local_db = None
+    if db is None:
+        logger.info(f"Background task: Creating new database session")
+        local_db = SessionLocal()
+        db = local_db
+
     try:
         # Generate the memo using the specified provider and passing document_id and db
         # This allows the analyzer to use the extracted financial data
@@ -256,3 +263,8 @@ def _generate_and_save_memo(document_id: int, document_text: str, company_name: 
     except Exception as e:
         logger.error(f"Background task: Error generating or saving memo: {str(e)}")
         # Don't re-raise the exception as this is a background task
+    finally:
+        # Close the local database session if we created one
+        if local_db is not None:
+            local_db.close()
+            logger.info(f"Background task: Closed local database session")

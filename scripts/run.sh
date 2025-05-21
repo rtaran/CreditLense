@@ -2,14 +2,15 @@
 
 echo "🚀 Starting FastAPI server..."
 
-# Check if `uv` is installed
-if command -v uv &> /dev/null
-then
-    echo "✅ Using uv environment"
-    cd ..
-    uv run uvicorn app.main:app --reload --port 5001
-else
-    echo "⚠️ uv not found, using system Python environment"
-    cd ..
-    uvicorn app.main:app --reload --port 5001
-fi
+# Get the absolute path to the project root
+PROJECT_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+
+# Change to the project root
+cd "$PROJECT_ROOT"
+
+# Set up environment
+export PYTHONPATH="$PROJECT_ROOT"
+
+echo "✅ Using uv environment"
+# Just run uvicorn directly 
+uvicorn app.main:app --reload --port 5002

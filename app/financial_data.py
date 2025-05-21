@@ -380,10 +380,9 @@ class FinancialDataExtractor:
                 return current_assets / current_liabilities
 
         elif ratio_name == "Debt-to-Equity Ratio":
-            total_liabilities = (
-                self._get_value_from_dict(self.balance_sheet_data, [year, "Current Liabilities", "Total Current Liabilities"]) or 0 +
-                self._get_value_from_dict(self.balance_sheet_data, [year, "Non-Current Liabilities", "Total Non-Current Liabilities"]) or 0
-            )
+            current_liabilities = self._get_value_from_dict(self.balance_sheet_data, [year, "Current Liabilities", "Total Current Liabilities"]) or 0
+            non_current_liabilities = self._get_value_from_dict(self.balance_sheet_data, [year, "Non-Current Liabilities", "Total Non-Current Liabilities"]) or 0
+            total_liabilities = current_liabilities + non_current_liabilities
             total_equity = self._get_value_from_dict(self.balance_sheet_data, [year, "Equity", "Total Equity"])
 
             if total_liabilities is not None and total_equity is not None and total_equity != 0:

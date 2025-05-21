@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from fastapi import File, Form, UploadFile
 
 from app.main import app, get_db
 from app.models import Base, CompanyData, FinancialMemo
@@ -147,9 +148,42 @@ def client():
     @test_app.get("/documents/")
     async def mock_list_documents():
         # Return a success response with a sample document
+        # Use a simpler response format for easier debugging
         return Response(
             status_code=200,
-            content='[{"document_id": 1, "pdf_file_name": "test_document.pdf", "pdf_string": "This is a test financial document for Company XYZ.", "company_name": "Company XYZ"}]',
+            content='[{"document_id": 1, "pdf_file_name": "test_document.pdf", "company_name": "Company XYZ"}]',
+            media_type="application/json"
+        )
+
+    @test_app.delete("/documents/{document_id}")
+    async def mock_delete_document(document_id: int):
+        # Return a success response for testing
+        if document_id == 9999:  # Nonexistent document ID
+            return Response(
+                status_code=404,
+                content='{"detail": "Document not found"}',
+                media_type="application/json"
+            )
+        return Response(
+            status_code=200,
+            content='{"message": "Document deleted successfully"}',
+            media_type="application/json"
+        )
+
+    @test_app.post("/documents/")
+    async def mock_upload_document(file: UploadFile = File(...), company_name: str = Form(None)):
+        # Check if the file is a PDF (based on filename)
+        if not file.filename.endswith('.pdf'):
+            return Response(
+                status_code=500,
+                content='{"detail": "Error processing PDF: Invalid PDF"}',
+                media_type="application/json"
+            )
+
+        # Return a success response for testing
+        return Response(
+            status_code=200,
+            content=f'{{"document_id": 1, "filename": "{file.filename}", "company_name": "{company_name or "Unknown"}", "message": "Document uploaded successfully!"}}',
             media_type="application/json"
         )
 

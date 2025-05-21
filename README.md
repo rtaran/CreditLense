@@ -62,7 +62,7 @@ A web-based application that allows clients to upload a **PDF financial statemen
 │
 ├── data/                         # Data storage
 │   ├── database/                 # Database files
-│   │   └── financial_data.db     # SQLite database
+│   │   └── credit_lense.db       # SQLite database
 │   ├── output/                   # Generated memos
 │   └── uploads/                  # Uploaded files
 │
@@ -116,11 +116,86 @@ cp config/.env.template .env  # Create .env file from template
 
 ⚠️ Make sure the `.env` file exists in the root directory. You can use the included `config/.env.template` as a starting point.
 
+### Environment Variables
+
+The application uses the following environment variables:
+
+| Variable | Description | Default Value |
+|----------|-------------|---------------|
+| `OPENAI_API_KEY` | Your OpenAI API key for accessing GPT models | - |
+| `GOOGLE_API_KEY` | Your Google API key for accessing Gemini models | - |
+| `NEWS_API_KEY` | Your News API key for fetching news (optional) | - |
+| `DATABASE_URL` | URL for the SQLite database | `sqlite:///./database/financial_data.db` |
+| `UPLOAD_FOLDER` | Directory for uploaded files | `./data/uploads` |
+| `LLM_PROVIDER` | Comma-separated list of LLM providers to use | `google,openai` |
+| `STATIC_FILES_DIR` | Directory for static files | `static` |
+| `TEMPLATES_DIR` | Directory for HTML templates | `templates` |
+
+You can set these variables in the `.env` file:
+
+```
+# API Keys
 OPENAI_API_KEY=your_openai_key
 GOOGLE_API_KEY=your_google_key
-DATABASE_URL=sqlite:///./data/database/financial_data.db
+
+# Database Configuration
+DATABASE_URL=sqlite:///./database/financial_data.db
+
+# Upload Configuration
 UPLOAD_FOLDER=./data/uploads
-LLM_PROVIDER=google  # or openai
+
+# LLM Configuration
+LLM_PROVIDER=openai,google  # comma-separated list of providers
+
+# Directory Configuration
+STATIC_FILES_DIR=static
+TEMPLATES_DIR=templates
+```
+
+## 📋 How to Use
+
+Once you have set up the application and started the server using `./scripts/run.sh`, you can access the web interface by opening your browser and navigating to `http://localhost:5001`.
+
+### 1. Upload a Financial Document
+
+1. From the home page, click on "Upload Document" or navigate to the "Documents" section.
+2. Click the "Choose File" button and select a PDF financial statement.
+3. Enter the company name (optional but recommended).
+4. Click "Upload" to submit the document.
+5. The system will process the document and extract financial data.
+
+### 2. Generate a Credit Memo
+
+1. Navigate to the "Documents" section to see your uploaded documents.
+2. Find the document you want to analyze and click "Generate Memo".
+3. Select the LLM provider you want to use (OpenAI or Google Gemini).
+4. Click "Generate" to start the analysis process.
+5. The system will process the document in the background. This may take a few moments depending on the size of the document and the LLM provider's response time.
+
+### 3. View and Download Memos
+
+1. Navigate to the "Memos" section to see all generated memos.
+2. You can view a memo directly in the browser by clicking "View".
+3. To download the memo as a Word document, click "Download".
+4. The memo will be downloaded as a .docx file that can be opened in Microsoft Word or any compatible word processor.
+
+### 4. Managing Documents and Memos
+
+1. In the "Documents" section, you can delete documents by clicking the "Delete" button.
+2. In the "Memos" section, you can delete memos by clicking the "Delete" button.
+3. You can generate multiple memos for the same document using different LLM providers to compare results.
+
+### 5. Uploading Methodology Documents
+
+1. Navigate to the "Methodology" section.
+2. Upload a PDF document containing your credit analysis methodology.
+3. The system will use this methodology to guide the LLM in generating more accurate and relevant credit memos.
+
+### 6. Customizing Memo Format
+
+1. Navigate to the "Memo Format" section.
+2. Upload a Word document (.docx) template for your credit memos.
+3. The system will use this template when generating new memos, maintaining your organization's branding and formatting standards.
 
 🧾 Output Example
 

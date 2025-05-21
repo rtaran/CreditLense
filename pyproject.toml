@@ -7,23 +7,27 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.27.1",
-    "pymupdf>=1.25.5", # for PDF parsing (fitz)
-    "python-dotenv>=1.0.1", # for loading .env files
-    "sqlalchemy>=2.0.40", # for ORM
-    "requests>=2.32.3", # for HTTP requests
-    "pylint>=3.3.6", # for linting
+    "pymupdf>=1.25.5",  # for PDF parsing (fitz)
+    "python-dotenv>=1.0.1",  # for loading .env files
+    "sqlalchemy>=2.0.40",  # for ORM
+    "requests>=2.32.3",  # for HTTP requests
+    "pylint>=3.3.6",  # for linting
     "multipart>=1.2.1",
     "python-multipart>=0.0.20",
-    "openai>=1.0.0", # for OpenAI API
-    "google-generativeai>=0.3.0", # for Google Gemini API
-    "python-docx>=0.8.11", # for Word document generation
+    "openai>=1.0.0",  # for OpenAI API
+    "google-generativeai>=0.3.0",  # for Google Gemini API
+    "python-docx>=0.8.11",  # for Word document generation
     "black>=25.1.0",
-    "pytest>=7.4.0", # for testing
-    "pytest-cov>=4.1.0", # for test coverage
-    "httpx>=0.24.1", # for testing FastAPI
-    "jinja2>=3.1.2", # for templating
+    "pytest>=7.4.0",  # for testing
+    "pytest-cov>=4.1.0",  # for test coverage
+    "httpx>=0.24.1",  # for testing FastAPI
+    "jinja2>=3.1.2",  # for templating
 ]
 
-[tool.uv]
-# Optional section to specify which file to run by default (optional)
-# entrypoint = "app.main:app"
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_backend"
+
+[project.scripts]
+run-app = "scripts.run_app:main"
+run-tests = "scripts.run_tests:main"

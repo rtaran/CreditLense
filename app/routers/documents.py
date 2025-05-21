@@ -92,6 +92,8 @@ def process_financial_data(db: Session, document_id: int, pdf_text: str):
                             document.total_assets = current_assets
                         elif non_current_assets is not None:
                             document.total_assets = non_current_assets
+                    elif current_assets is not None:
+                        document.total_assets = current_assets
 
                 # Extract total liabilities if available
                 if "Current Liabilities" in balance_sheet and "Total Current Liabilities" in balance_sheet["Current Liabilities"]:
@@ -104,6 +106,8 @@ def process_financial_data(db: Session, document_id: int, pdf_text: str):
                             document.total_liabilities = current_liabilities
                         elif non_current_liabilities is not None:
                             document.total_liabilities = non_current_liabilities
+                    elif current_liabilities is not None:
+                        document.total_liabilities = current_liabilities
 
             # Extract revenue and net income if available
             if latest_year in financial_data["income_statement"]:

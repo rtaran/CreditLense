@@ -94,19 +94,23 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Get static files and templates directories from environment variables or use defaults
+STATIC_FILES_DIR = os.getenv("STATIC_FILES_DIR", "static")
+TEMPLATES_DIR = os.getenv("TEMPLATES_DIR", "templates")
+
 # Mount static files directory
-logger.info("Mounting static files directory")
+logger.info(f"Mounting static files directory: {STATIC_FILES_DIR}")
 try:
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+    app.mount("/static", StaticFiles(directory=STATIC_FILES_DIR), name="static")
     logger.debug("Static files directory mounted successfully")
 except Exception as e:
     logger.error(f"Error mounting static files directory: {str(e)}")
     raise
 
 # Set up Jinja2 templates
-logger.info("Setting up Jinja2 templates")
+logger.info(f"Setting up Jinja2 templates: {TEMPLATES_DIR}")
 try:
-    templates = Jinja2Templates(directory="templates")
+    templates = Jinja2Templates(directory=TEMPLATES_DIR)
     logger.debug("Jinja2 templates set up successfully")
 except Exception as e:
     logger.error(f"Error setting up Jinja2 templates: {str(e)}")
@@ -198,6 +202,25 @@ def financial_data_page(request: Request, document_id: int, db: Session = Depend
         # Log the amount of financial data retrieved
         years = financial_data.get("years", [])
         logger.info(f"GET /financial-data/{document_id} - Retrieved financial data for {len(years)} years")
+
+        # If no financial data exists, extract and store it
+        if not years and document.pdf_string:
+            logger.info(f"GET /financial-data/{document_id} - No financial data found, extracting from document")
+            from app.financial_data import FinancialDataExtractor, store_financial_data
+
+            # Extract financial data from the PDF text
+            extractor = FinancialDataExtractor(document.pdf_string)
+            financial_data = extractor.extract_all_data()
+
+            # Store the extracted data in the database
+            store_financial_data(db, document_id, financial_data)
+
+            logger.info(f"GET /financial-data/{document_id} - Financial data extracted and stored")
+
+            # Get the updated financial data
+            financial_data = get_financial_data_for_document(db, document_id)
+            years = financial_data.get("years", [])
+            logger.info(f"GET /financial-data/{document_id} - Retrieved financial data for {len(years)} years after extraction")
 
         # Determine the selected year (default to the most recent year)
         selected_year = max(years or [0]) if years else None
