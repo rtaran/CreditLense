@@ -208,11 +208,22 @@ def financial_data_page(request: Request, document_id: int, db: Session = Depend
             logger.info(f"GET /financial-data/{document_id} - No financial data found, extracting from document")
             from app.financial_data import FinancialDataExtractor, store_financial_data
 
-            # Extract financial data from the PDF text
+            # Extract financial data from the PDF text using LLM
             extractor = FinancialDataExtractor(document.pdf_string)
-            financial_data = extractor.extract_all_data()
+            logger.info(f"GET /financial-data/{document_id} - Extracting financial data using LLM")
+            try:
+                # Try to extract data using LLM first with OpenAI provider
+                financial_data = extractor.extract_data_with_llm(provider="openai")
+                logger.info(f"GET /financial-data/{document_id} - Successfully extracted financial data using LLM with OpenAI provider")
+            except Exception as e:
+                logger.error(f"GET /financial-data/{document_id} - Error extracting data with LLM: {str(e)}")
+                # Fall back to regex-based extraction if LLM fails
+                logger.info(f"GET /financial-data/{document_id} - Falling back to regex-based extraction")
+                financial_data = extractor.extract_all_data()
+                logger.info(f"GET /financial-data/{document_id} - Successfully extracted financial data using regex")
 
             # Store the extracted data in the database
+            logger.info(f"GET /financial-data/{document_id} - Storing financial data in database")
             store_financial_data(db, document_id, financial_data)
 
             logger.info(f"GET /financial-data/{document_id} - Financial data extracted and stored")

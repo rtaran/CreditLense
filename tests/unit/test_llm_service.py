@@ -142,3 +142,72 @@ def test_error_handling():
 
             result = service.generate_text("Test prompt")
             assert "Error: OpenAI API quota exceeded" in result
+
+def test_token_limit_fallback():
+    """Test that the service falls back to another provider when a token limit error occurs."""
+    # Set up environment with both providers available
+    with patch.dict(os.environ, {
+        "LLM_PROVIDER": "openai,google", 
+        "OPENAI_API_KEY": "test_key", 
+        "GOOGLE_API_KEY": "test_key"
+    }):
+        service = LLMService()
+
+        # Mock OpenAI to raise a token limit error
+        with patch.object(
+            service, 
+            "_generate_with_openai", 
+            side_effect=Exception("This model's maximum context length is 16385 tokens. However, your messages resulted in 16500 tokens")
+        ), patch.object(
+            service, 
+            "_generate_with_gemini", 
+            return_value="Fallback response from Google Gemini"
+        ):
+            # The service should catch the token limit error from OpenAI and fall back to Google
+            result = service.generate_text("Test prompt")
+            assert result == "Fallback response from Google Gemini"
+
+    # Test with Google as primary provider
+    with patch.dict(os.environ, {
+        "LLM_PROVIDER": "google,openai", 
+        "OPENAI_API_KEY": "test_key", 
+        "GOOGLE_API_KEY": "test_key"
+    }):
+        service = LLMService()
+
+        # Mock Google to raise a token limit error
+        with patch.object(
+            service, 
+            "_generate_with_gemini", 
+            side_effect=Exception("Content length 100000 exceeds maximum context length of 30720")
+        ), patch.object(
+            service, 
+            "_generate_with_openai", 
+            return_value="Fallback response from OpenAI"
+        ):
+            # The service should catch the token limit error from Google and fall back to OpenAI
+            result = service.generate_text("Test prompt")
+            assert result == "Fallback response from OpenAI"
+
+    # Test when all providers fail with token limit errors
+    with patch.dict(os.environ, {
+        "LLM_PROVIDER": "openai,google", 
+        "OPENAI_API_KEY": "test_key", 
+        "GOOGLE_API_KEY": "test_key"
+    }):
+        service = LLMService()
+
+        # Mock both providers to raise token limit errors
+        with patch.object(
+            service, 
+            "_generate_with_openai", 
+            side_effect=Exception("maximum context length exceeded")
+        ), patch.object(
+            service, 
+            "_generate_with_gemini", 
+            side_effect=Exception("content too long")
+        ):
+            # The service should try both providers and then raise an exception
+            with pytest.raises(Exception) as excinfo:
+                service.generate_text("Test prompt")
+            assert "content too long" in str(excinfo.value).lower()

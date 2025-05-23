@@ -1,4 +1,5 @@
 import pytest
+import json
 from unittest.mock import patch, MagicMock
 from app.financial_data import FinancialDataExtractor, store_financial_data, get_financial_data_for_document
 from app.models import CompanyData, FinancialYear, BalanceSheetItem, IncomeStatementItem, CashFlowItem, FinancialRatio
@@ -266,6 +267,155 @@ def test_store_financial_data(db_session):
             assert len(income_statement_items) == 2
             assert len(cash_flow_items) == 1
             assert len(financial_ratios) == 1
+
+def test_extract_data_with_llm():
+    """Test extracting financial data using LLM."""
+    # Sample PDF text
+    pdf_text = """
+    Financial Statements for XYZ Corporation
+    Year ended December 31, 2022 and 2021
+
+    Balance Sheet (in thousands)
+                            2022    2021
+    Cash                    1000    800
+    Accounts Receivable     2000    1800
+    Inventory               3000    2500
+    Total Current Assets    6000    5100
+
+    Property, Plant and Equipment    8000    7500
+    Total Assets            14000   12600
+
+    Accounts Payable        1500    1200
+    Short-term Debt         1000    800
+    Total Current Liabilities   2500    2000
+
+    Long-term Debt          4000    3500
+    Total Liabilities       6500    5500
+
+    Common Stock            2000    2000
+    Retained Earnings       5500    5100
+    Total Equity            7500    7100
+
+    Income Statement (in thousands)
+                            2022    2021
+    Revenue                 15000   14000
+    Cost of Goods Sold      9000    8500
+    Gross Profit            6000    5500
+    Operating Expenses      4000    3800
+    Operating Income        2000    1700
+    Net Income              1500    1300
+
+    Cash Flow Statement (in thousands)
+                            2022    2021
+    Net Income              1500    1300
+    Depreciation            1000    900
+    Net Cash from Operations    2500    2200
+    """
+
+    # Create a sample LLM response
+    llm_response = {
+        "years": [2022, 2021],
+        "balance_sheet": {
+            "2022": {
+                "Current Assets": {
+                    "Cash and Cash Equivalents": 1000,
+                    "Accounts Receivable": 2000,
+                    "Inventory": 3000,
+                    "Total Current Assets": 6000
+                },
+                "Non-Current Assets": {
+                    "Property, Plant and Equipment": 8000,
+                    "Total Non-Current Assets": 8000
+                },
+                "Current Liabilities": {
+                    "Accounts Payable": 1500,
+                    "Short-term Debt": 1000,
+                    "Total Current Liabilities": 2500
+                },
+                "Non-Current Liabilities": {
+                    "Long-term Debt": 4000,
+                    "Total Non-Current Liabilities": 4000
+                },
+                "Equity": {
+                    "Common Stock": 2000,
+                    "Retained Earnings": 5500,
+                    "Total Equity": 7500
+                }
+            },
+            "2021": {
+                "Current Assets": {
+                    "Cash and Cash Equivalents": 800,
+                    "Accounts Receivable": 1800,
+                    "Inventory": 2500,
+                    "Total Current Assets": 5100
+                }
+            }
+        },
+        "income_statement": {
+            "2022": {
+                "Revenue": {
+                    "Revenue": 15000,
+                    "Total Revenue": 15000
+                },
+                "Expenses": {
+                    "Cost of Goods Sold": 9000,
+                    "Gross Profit": 6000,
+                    "Operating Expenses": 4000
+                },
+                "Profit": {
+                    "Operating Income": 2000,
+                    "Net Income": 1500
+                }
+            }
+        },
+        "cash_flow": {
+            "2022": {
+                "Operating Activities": {
+                    "Net Income": 1500,
+                    "Depreciation and Amortization": 1000,
+                    "Net Cash from Operating Activities": 2500
+                }
+            }
+        },
+        "ratios": {
+            "2022": {
+                "Liquidity": {
+                    "Current Ratio": 2.4
+                },
+                "Solvency": {
+                    "Debt-to-Equity Ratio": 0.87
+                },
+                "Profitability": {
+                    "Net Profit Margin": 10.0
+                }
+            }
+        }
+    }
+
+    # Initialize the extractor
+    extractor = FinancialDataExtractor(pdf_text)
+
+    # Mock the LLM service
+    with patch('app.financial_data.llm_service.generate_text') as mock_generate_text:
+        # Configure the mock to return a JSON string
+        mock_generate_text.return_value = json.dumps(llm_response)
+
+        # Call the method
+        result = extractor.extract_data_with_llm()
+
+        # Verify the result
+        assert result["years"] == [2022, 2021]
+        assert len(result["balance_sheet"]) == 2
+        assert result["balance_sheet"]["2022"]["Current Assets"]["Cash and Cash Equivalents"] == 1000
+        assert result["income_statement"]["2022"]["Revenue"]["Total Revenue"] == 15000
+        assert result["cash_flow"]["2022"]["Operating Activities"]["Net Cash from Operating Activities"] == 2500
+        assert result["ratios"]["2022"]["Liquidity"]["Current Ratio"] == 2.4
+
+        # Verify that the LLM service was called with the correct parameters
+        mock_generate_text.assert_called_once()
+        args, kwargs = mock_generate_text.call_args
+        assert "You are a financial data extraction expert" in args[0]
+        assert "Format your response as a JSON object" in args[0]
 
 def test_get_financial_data_for_document(db_session):
     """Test retrieving financial data for a document."""

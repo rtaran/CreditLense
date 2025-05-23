@@ -237,8 +237,8 @@
                 <a href="/documents" class="btn secondary">Back to Documents</a>
                 <div class="memo-actions">
                     <select class="llm-provider-select" id="provider-{{ document.document_id }}">
-                        <option value="google">Google Gemini</option>
                         <option value="openai">OpenAI GPT</option>
+                        <option value="google">Google Gemini</option>
                     </select>
                     <button class="btn primary generate-memo" data-id="{{ document.document_id }}">Generate Memo</button>
                     <button class="btn primary compare-llms" data-id="{{ document.document_id }}">Compare LLMs</button>

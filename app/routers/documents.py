@@ -52,21 +52,33 @@ def extract_text_from_pdf(file: UploadFile) -> str:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
-def process_financial_data(db: Session, document_id: int, pdf_text: str):
+def process_financial_data(document_id: int, pdf_text: str):
     """
     Process and store financial data from a PDF.
 
     Args:
-        db: The database session
         document_id: The ID of the document to associate the data with
         pdf_text: The text content of the PDF
     """
+    # Create a new database session for this background task
+    db = SessionLocal()
     try:
         # Extract financial data from the PDF text
         extractor = FinancialDataExtractor(pdf_text)
-        financial_data = extractor.extract_all_data()
+
+        # Try to extract data using LLM first, fall back to regex-based extraction if it fails
+        try:
+            logger.info(f"Extracting financial data using LLM with OpenAI provider for document {document_id}")
+            financial_data = extractor.extract_data_with_llm(provider="openai")
+            logger.info(f"Successfully extracted financial data using LLM with OpenAI provider for document {document_id}")
+        except Exception as e:
+            logger.error(f"Error extracting financial data using LLM: {str(e)}")
+            logger.info(f"Falling back to regex-based extraction for document {document_id}")
+            financial_data = extractor.extract_all_data()
+            logger.info(f"Successfully extracted financial data using regex for document {document_id}")
 
         # Store the extracted data in the database
+        logger.info(f"Storing financial data for document {document_id}")
         store_financial_data(db, document_id, financial_data)
 
         logger.info(f"Financial data processed and stored for document {document_id}")
@@ -132,6 +144,10 @@ def process_financial_data(db: Session, document_id: int, pdf_text: str):
     except Exception as e:
         logger.error(f"Error processing financial data: {str(e)}")
         # Don't raise an exception here, as this is run in the background
+    finally:
+        # Always close the database session
+        db.close()
+        logger.info(f"Closed database session for background task processing document {document_id}")
 
 @router.post("/documents/")
 async def upload_document(
@@ -179,7 +195,6 @@ async def upload_document(
         logger.info(f"Starting background task to process financial data for document {doc.document_id}")
         background_tasks.add_task(
             process_financial_data,
-            db=db,
             document_id=doc.document_id,
             pdf_text=pdf_text
         )

@@ -2,6 +2,7 @@
 Module for extracting and processing financial data from PDFs.
 """
 import re
+import json
 import logging
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Any
@@ -15,6 +16,7 @@ from app.models import (
     CashFlowItem, 
     FinancialRatio
 )
+from app.llm_service import llm_service
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +40,216 @@ class FinancialDataExtractor:
         self.income_statement_data = {}
         self.cash_flow_data = {}
         self.ratios = {}
+
+    def extract_data_with_llm(self, provider: str = None) -> Dict[str, Any]:
+        """
+        Extract financial data from the PDF text using an LLM.
+
+        Args:
+            provider: The LLM provider to use (optional)
+
+        Returns:
+            A dictionary containing all extracted financial data
+        """
+        logger.info("Starting extraction of financial data using LLM")
+
+        # Truncate the PDF text to avoid exceeding token limits
+        max_doc_length = 12000
+        original_length = len(self.pdf_text)
+        truncated_text = self.pdf_text[:max_doc_length]
+
+        if original_length > max_doc_length:
+            logger.info(f"PDF text truncated from {original_length} to {max_doc_length} characters")
+        else:
+            logger.debug(f"PDF text length ({original_length} characters) is within limits")
+
+        # Create a prompt for the LLM
+        logger.info("Creating extraction prompt for LLM")
+        prompt = self._create_extraction_prompt(truncated_text)
+
+        # Generate the financial data using the LLM service
+        logger.info(f"Sending prompt to LLM using {provider or 'default'} provider")
+        try:
+            response = llm_service.generate_text(prompt, provider=provider)
+            logger.info(f"Received response from LLM with length {len(response)} characters")
+        except Exception as e:
+            logger.error(f"Error generating financial data with LLM: {str(e)}")
+            # Fall back to regex-based extraction if LLM fails
+            logger.info("Falling back to regex-based extraction")
+            return self.extract_all_data()
+
+        # Parse the LLM's response to extract the financial data
+        logger.info("Parsing LLM response to extract financial data")
+        try:
+            financial_data = self._parse_llm_response(response)
+            logger.info(f"Successfully parsed financial data from LLM response")
+            return financial_data
+        except Exception as e:
+            logger.error(f"Error parsing LLM response: {str(e)}")
+            # Fall back to regex-based extraction if parsing fails
+            logger.info("Falling back to regex-based extraction")
+            return self.extract_all_data()
+
+    def _create_extraction_prompt(self, pdf_text: str) -> str:
+        """
+        Create a prompt for the LLM to extract financial data.
+
+        Args:
+            pdf_text: The text content of the PDF
+
+        Returns:
+            A prompt for the LLM
+        """
+        prompt = f"""
+        You are a financial data extraction expert. Extract the following financial data from the provided financial document:
+
+        1. Reporting years (list all years found in the document)
+        2. Balance sheet data for each year, including:
+           - Current Assets (Cash and Cash Equivalents, Short-term Investments, Accounts Receivable, Inventory, Prepaid Expenses, Total Current Assets)
+           - Non-Current Assets (Property, Plant and Equipment, Intangible Assets, Goodwill, Long-term Investments, Deferred Tax Assets, Total Non-Current Assets)
+           - Current Liabilities (Accounts Payable, Short-term Debt, Current Portion of Long-term Debt, Accrued Expenses, Deferred Revenue, Total Current Liabilities)
+           - Non-Current Liabilities (Long-term Debt, Pension Liabilities, Deferred Tax Liabilities, Total Non-Current Liabilities)
+           - Equity (Common Stock, Retained Earnings, Additional Paid-in Capital, Treasury Stock, Total Equity)
+        3. Income statement data for each year, including:
+           - Revenue (Revenue, Net Sales, Total Revenue)
+           - Expenses (Cost of Goods Sold, Gross Profit, Operating Expenses, Research and Development, Selling, General and Administrative, Depreciation and Amortization)
+           - Profit (Operating Income, Interest Expense, Income Before Tax, Income Tax Expense, Net Income)
+           - Per Share Data (Basic Earnings Per Share, Diluted Earnings Per Share, Dividends Per Share)
+        4. Cash flow data for each year, including:
+           - Operating Activities (Net Income, Depreciation and Amortization, Changes in Working Capital, Net Cash from Operating Activities)
+           - Investing Activities (Capital Expenditures, Acquisitions, Purchases of Investments, Sales of Investments, Net Cash from Investing Activities)
+           - Financing Activities (Debt Issuance, Debt Repayment, Dividends Paid, Share Repurchases, Net Cash from Financing Activities)
+           - Summary (Net Change in Cash, Cash at Beginning of Period, Cash at End of Period)
+        5. Financial ratios for each year, including:
+           - Liquidity (Current Ratio, Quick Ratio, Cash Ratio)
+           - Solvency (Debt-to-Equity Ratio, Debt-to-Assets Ratio, Interest Coverage Ratio)
+           - Profitability (Gross Margin, Operating Margin, Net Profit Margin, Return on Assets, Return on Equity)
+           - Efficiency (Asset Turnover, Inventory Turnover, Receivables Turnover)
+
+        Format your response as a JSON object with the following structure:
+        {{
+            "years": [list of years as integers],
+            "balance_sheet": {{
+                "year1": {{
+                    "category1": {{
+                        "item1": value1,
+                        "item2": value2,
+                        ...
+                    }},
+                    ...
+                }},
+                ...
+            }},
+            "income_statement": {{
+                "year1": {{
+                    "category1": {{
+                        "item1": value1,
+                        "item2": value2,
+                        ...
+                    }},
+                    ...
+                }},
+                ...
+            }},
+            "cash_flow": {{
+                "year1": {{
+                    "category1": {{
+                        "item1": value1,
+                        "item2": value2,
+                        ...
+                    }},
+                    ...
+                }},
+                ...
+            }},
+            "ratios": {{
+                "year1": {{
+                    "category1": {{
+                        "ratio1": value1,
+                        "ratio2": value2,
+                        ...
+                    }},
+                    ...
+                }},
+                ...
+            }}
+        }}
+
+        If you cannot find a specific value, use null instead. Only include the data you can find in the document.
+
+        DOCUMENT:
+        {pdf_text}
+        """
+        return prompt
+
+    def _parse_llm_response(self, response: str) -> Dict[str, Any]:
+        """
+        Parse the LLM's response to extract the financial data.
+
+        Args:
+            response: The LLM's response
+
+        Returns:
+            A dictionary containing the extracted financial data
+        """
+        # Try to extract JSON from the response
+        try:
+            # Look for JSON-like structure in the response
+            json_match = re.search(r'({[\s\S]*})', response)
+            if json_match:
+                json_str = json_match.group(1)
+                financial_data = json.loads(json_str)
+                logger.info("Successfully extracted JSON from LLM response")
+
+                # Validate the structure of the financial data
+                if not self._validate_financial_data(financial_data):
+                    logger.warning("Financial data from LLM has invalid structure")
+                    raise ValueError("Invalid financial data structure")
+
+                # Update instance variables
+                self.years = financial_data.get("years", [])
+                self.balance_sheet_data = financial_data.get("balance_sheet", {})
+                self.income_statement_data = financial_data.get("income_statement", {})
+                self.cash_flow_data = financial_data.get("cash_flow", {})
+                self.ratios = financial_data.get("ratios", {})
+
+                return financial_data
+            else:
+                logger.warning("No JSON found in LLM response")
+                raise ValueError("No JSON found in LLM response")
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding JSON from LLM response: {str(e)}")
+            raise
+
+    def _validate_financial_data(self, financial_data: Dict[str, Any]) -> bool:
+        """
+        Validate the structure of the financial data.
+
+        Args:
+            financial_data: The financial data to validate
+
+        Returns:
+            True if the financial data has a valid structure, False otherwise
+        """
+        # Check if the financial data has the required keys
+        required_keys = ["years", "balance_sheet", "income_statement", "cash_flow", "ratios"]
+        for key in required_keys:
+            if key not in financial_data:
+                logger.warning(f"Financial data missing required key: {key}")
+                return False
+
+        # Check if years is a list
+        if not isinstance(financial_data["years"], list):
+            logger.warning("Years is not a list")
+            return False
+
+        # Check if the other keys are dictionaries
+        for key in required_keys[1:]:
+            if not isinstance(financial_data[key], dict):
+                logger.warning(f"{key} is not a dictionary")
+                return False
+
+        return True
 
     def extract_all_data(self) -> Dict[str, Any]:
         """

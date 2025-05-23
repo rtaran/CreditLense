@@ -56,6 +56,7 @@ class LLMService:
     def generate_text(self, prompt: str, max_tokens: Optional[int] = None, provider: Optional[str] = None) -> str:
         """
         Generate text using the specified or configured LLM provider.
+        If a token limit error occurs with the primary provider, it will try to use another available provider.
 
         Args:
             prompt: The prompt to send to the LLM
@@ -73,25 +74,58 @@ class LLMService:
             logger.warning(f"Requested provider '{active_provider}' is not in available providers list. Using default provider '{self.provider}' instead.")
             active_provider = self.provider
 
+        # Create a list of providers to try, starting with the active provider
+        providers_to_try = [active_provider]
+
+        # Add other available providers as fallbacks
+        for p in self.available_providers:
+            if p != active_provider:
+                providers_to_try.append(p)
+
         # Log prompt length instead of full prompt for privacy and to avoid huge log files
         prompt_length = len(prompt)
         logger.info(f"Generating text with provider: {active_provider}, prompt length: {prompt_length} chars, max_tokens: {max_tokens or 'default'}")
 
-        try:
-            if active_provider == "openai":
-                result = self._generate_with_openai(prompt, max_tokens)
-                logger.info(f"Successfully generated text with OpenAI, response length: {len(result)} chars")
-                return result
-            elif active_provider == "google":
-                result = self._generate_with_gemini(prompt, max_tokens)
-                logger.info(f"Successfully generated text with Google Gemini, response length: {len(result)} chars")
-                return result
-            else:
-                logger.error(f"Unsupported LLM provider: {active_provider}")
-                raise ValueError(f"Unsupported LLM provider: {active_provider}")
-        except Exception as e:
-            logger.error(f"Error generating text with {active_provider}: {str(e)}")
-            raise
+        last_error = None
+        for idx, current_provider in enumerate(providers_to_try):
+            try:
+                if current_provider == "openai":
+                    result = self._generate_with_openai(prompt, max_tokens)
+                    logger.info(f"Successfully generated text with OpenAI, response length: {len(result)} chars")
+                    return result
+                elif current_provider == "google":
+                    result = self._generate_with_gemini(prompt, max_tokens)
+                    logger.info(f"Successfully generated text with Google Gemini, response length: {len(result)} chars")
+                    return result
+                else:
+                    logger.error(f"Unsupported LLM provider: {current_provider}")
+                    continue  # Skip to the next provider
+            except Exception as e:
+                error_msg = str(e).lower()
+                last_error = e
+
+                # Check if this is a token-related error
+                is_token_error = any(term in error_msg for term in ["token", "context length", "too long", "maximum context", "content length"])
+
+                if is_token_error:
+                    if idx < len(providers_to_try) - 1:
+                        next_provider = providers_to_try[idx + 1]
+                        logger.warning(f"Token limit exceeded with {current_provider}. Trying next provider: {next_provider}")
+                        continue  # Try the next provider
+                    else:
+                        logger.error(f"Token limit exceeded with all available providers: {str(e)}")
+                        raise  # No more providers to try
+                else:
+                    logger.error(f"Error generating text with {current_provider}: {str(e)}")
+                    raise  # Not a token error, so don't try other providers
+
+        # If we get here, all providers failed
+        if last_error:
+            logger.error(f"All providers failed. Last error: {str(last_error)}")
+            raise last_error
+        else:
+            logger.error("All providers failed with unknown errors")
+            raise ValueError("Failed to generate text with all available providers")
 
     def _generate_with_openai(self, prompt: str, max_tokens: Optional[int] = None) -> str:
         """Generate text using OpenAI's API."""
