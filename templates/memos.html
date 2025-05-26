@@ -29,6 +29,7 @@
 
         <div class="actions">
             <a href="/documents" class="btn primary">Generate New Memo</a>
+            <button id="delete-selected-memos" class="btn secondary" style="display: none;">Delete Selected</button>
         </div>
 
         {% if memos %}
@@ -36,6 +37,7 @@
             <table>
                 <thead>
                     <tr>
+                        <th><input type="checkbox" id="select-all-memos" title="Select all memos"></th>
                         <th>ID</th>
                         <th>Document ID</th>
                         <th>LLM Provider</th>
@@ -46,6 +48,7 @@
                 <tbody>
                     {% for memo in memos %}
                     <tr>
+                        <td><input type="checkbox" class="memo-checkbox" data-id="{{ memo.memo_id }}" title="Select memo"></td>
                         <td>{{ memo.memo_id }}</td>
                         <td>{{ memo.document_id }}</td>
                         <td>

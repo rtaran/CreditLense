@@ -207,6 +207,69 @@ def delete_memo(memo_id: int, request: Request, db: Session = Depends(get_db)):
         logger.error(f"DELETE /memos/{memo_id} - Error deleting memo from database: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error deleting memo: {str(e)}")
 
+@router.delete("/memos/batch")
+async def delete_multiple_memos(request: Request, db: Session = Depends(get_db)):
+    client_host = request.client.host if request else "unknown"
+
+    # Parse the request body to get memo_ids
+    body = await request.json()
+    memo_ids = body.get("memo_ids", [])
+
+    # Validate memo_ids
+    if not memo_ids:
+        logger.error(f"DELETE /memos/batch - No memo_ids provided in request")
+        raise HTTPException(status_code=422, detail="No memo_ids provided")
+
+    # Ensure all memo_ids are integers
+    try:
+        memo_ids = [int(memo_id) for memo_id in memo_ids]
+    except (ValueError, TypeError):
+        logger.error(f"DELETE /memos/batch - Invalid memo_ids format: {memo_ids}")
+        raise HTTPException(status_code=422, detail="Invalid memo_ids format. All IDs must be integers")
+
+    logger.info(f"DELETE /memos/batch - Request from {client_host} to delete memos: {memo_ids}")
+
+    deleted_ids = []
+    not_found_ids = []
+    file_error_ids = []
+
+    try:
+        for memo_id in memo_ids:
+            memo = db.query(FinancialMemo).get(memo_id)
+            if not memo:
+                logger.warning(f"DELETE /memos/batch - Memo {memo_id} not found")
+                not_found_ids.append(memo_id)
+                continue
+
+            # Delete the file if it exists
+            if hasattr(memo, 'file_path') and memo.file_path and os.path.exists(memo.file_path):
+                try:
+                    os.remove(memo.file_path)
+                    logger.info(f"DELETE /memos/batch - Deleted file at {memo.file_path}")
+                except Exception as e:
+                    logger.error(f"DELETE /memos/batch - Error deleting file for memo {memo_id}: {str(e)}")
+                    file_error_ids.append(memo_id)
+                    # Continue with memo deletion even if file deletion fails
+
+            db.delete(memo)
+            deleted_ids.append(memo_id)
+
+        db.commit()
+        logger.info(f"DELETE /memos/batch - {len(deleted_ids)} memos deleted successfully")
+
+        result = {"message": f"{len(deleted_ids)} memos deleted successfully."}
+        if deleted_ids:
+            result["deleted_ids"] = deleted_ids
+        if not_found_ids:
+            result["not_found_ids"] = not_found_ids
+        if file_error_ids:
+            result["file_error_ids"] = file_error_ids
+
+        return result
+    except Exception as e:
+        logger.error(f"DELETE /memos/batch - Error deleting memos: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting memos: {str(e)}")
+
 def _generate_and_save_memo(document_id: int, document_text: str, company_name: str, provider: str = None, db: Session = None):
     """
     Generate a memo using the financial analyzer and save it to the database.

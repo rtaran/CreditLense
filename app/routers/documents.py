@@ -246,3 +246,42 @@ def delete_document(document_id: int, db: Session = Depends(get_db), request: Re
     except Exception as e:
         logger.error(f"DELETE /documents/{document_id} - Error deleting document: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error deleting document: {str(e)}")
+
+@router.delete("/documents/batch")
+async def delete_multiple_documents(request: Request, db: Session = Depends(get_db)):
+    client_host = request.client.host if request else "unknown"
+
+    # Parse the request body to get document_ids
+    body = await request.json()
+    document_ids = body.get("document_ids", [])
+
+    logger.info(f"DELETE /documents/batch - Request from {client_host} to delete documents: {document_ids}")
+
+    deleted_ids = []
+    not_found_ids = []
+
+    try:
+        for document_id in document_ids:
+            doc = db.query(CompanyData).get(document_id)
+            if not doc:
+                logger.warning(f"DELETE /documents/batch - Document {document_id} not found")
+                not_found_ids.append(document_id)
+                continue
+
+            logger.info(f"DELETE /documents/batch - Deleting document: {doc.pdf_file_name}")
+            db.delete(doc)
+            deleted_ids.append(document_id)
+
+        db.commit()
+        logger.info(f"DELETE /documents/batch - {len(deleted_ids)} documents deleted successfully")
+
+        result = {"message": f"{len(deleted_ids)} documents deleted successfully."}
+        if deleted_ids:
+            result["deleted_ids"] = deleted_ids
+        if not_found_ids:
+            result["not_found_ids"] = not_found_ids
+
+        return result
+    except Exception as e:
+        logger.error(f"DELETE /documents/batch - Error deleting documents: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting documents: {str(e)}")

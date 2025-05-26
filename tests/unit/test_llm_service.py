@@ -25,14 +25,14 @@ def test_llm_service_initialization():
         assert "google" in service.available_providers
         assert len(service.available_providers) == 2
 
-    # Test with empty provider list but with a valid Google API key
-    # When LLM_PROVIDER is empty, the service defaults to using the Google provider
-    with patch.dict(os.environ, {"LLM_PROVIDER": "", "GOOGLE_API_KEY": "test_key", "OPENAI_API_KEY": ""}):
+    # Test with empty provider list but with a valid OpenAI API key
+    # When LLM_PROVIDER is empty, the service defaults to using the OpenAI provider
+    with patch.dict(os.environ, {"LLM_PROVIDER": "", "OPENAI_API_KEY": "test_key", "GOOGLE_API_KEY": ""}):
         # This might not raise an error if the implementation allows empty provider list
-        # So we'll just create the service and check that it has the default provider (google)
+        # So we'll just create the service and check that it has the default provider (openai)
         service = LLMService()
-        assert service.provider == "google"  # Default provider is google
-        assert len(service.available_providers) == 1  # Only one provider (google)
+        assert service.provider == "openai"  # Default provider is openai
+        assert len(service.available_providers) == 1  # Only one provider (openai)
 
     # Test missing API key for Google
     with patch.dict(os.environ, {"LLM_PROVIDER": "google", "GOOGLE_API_KEY": ""}):

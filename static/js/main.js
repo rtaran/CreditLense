@@ -1,7 +1,117 @@
 // Main JavaScript file for Credit Lense application
 
+// Function to set up multiple selection and deletion for documents or memos
+function setupMultipleSelection(type) {
+    const checkboxes = document.querySelectorAll(`.${type}-checkbox`);
+    const selectAllCheckbox = document.getElementById(`select-all-${type}s`);
+    const deleteSelectedButton = document.getElementById(`delete-selected-${type}s`);
+
+    if (!checkboxes.length || !selectAllCheckbox || !deleteSelectedButton) {
+        return; // Exit if elements don't exist on the current page
+    }
+
+    // Function to update the delete button visibility
+    function updateDeleteButtonVisibility() {
+        const selectedCount = document.querySelectorAll(`.${type}-checkbox:checked`).length;
+        deleteSelectedButton.style.display = selectedCount > 0 ? 'inline-block' : 'none';
+        deleteSelectedButton.textContent = `Delete Selected (${selectedCount})`;
+    }
+
+    // Function to select or deselect all checkboxes
+    function toggleAllCheckboxes(isChecked) {
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+        updateDeleteButtonVisibility();
+    }
+
+    // Add event listeners to individual checkboxes
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            updateDeleteButtonVisibility();
+
+            // Update "select all" checkbox state
+            const allChecked = document.querySelectorAll(`.${type}-checkbox:not(:checked)`).length === 0;
+            selectAllCheckbox.checked = allChecked;
+        });
+    });
+
+    // Add event listener to "select all" checkbox
+    selectAllCheckbox.addEventListener('change', function() {
+        toggleAllCheckboxes(this.checked);
+    });
+
+    // Add event listener to "delete selected" button
+    deleteSelectedButton.addEventListener('click', async function() {
+        const selectedIds = Array.from(document.querySelectorAll(`.${type}-checkbox:checked`))
+            .map(checkbox => parseInt(checkbox.getAttribute('data-id')));
+
+        if (selectedIds.length === 0) {
+            return; // No items selected
+        }
+
+        if (confirm(`Are you sure you want to delete ${selectedIds.length} selected ${type}s?`)) {
+            try {
+                // Show loading state
+                const originalButtonText = this.textContent;
+                this.textContent = 'Deleting...';
+                this.disabled = true;
+
+                // Send request to delete selected items
+                const response = await fetch(`/${type}s/batch`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ [`${type}_ids`]: selectedIds })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log(`Deleted ${type}s:`, result);
+
+                    // Remove deleted items from the UI
+                    if (result.deleted_ids) {
+                        result.deleted_ids.forEach(id => {
+                            const checkbox = document.querySelector(`.${type}-checkbox[data-id="${id}"]`);
+                            if (checkbox) {
+                                const row = checkbox.closest('tr');
+                                if (row) {
+                                    row.remove();
+                                }
+                            }
+                        });
+                    }
+
+                    // Show success message
+                    alert(result.message || `${selectedIds.length} ${type}s deleted successfully`);
+
+                    // Update button visibility
+                    updateDeleteButtonVisibility();
+                } else {
+                    const errorData = await response.json();
+                    alert(`Error: ${errorData.detail || `Failed to delete ${type}s`}`);
+                }
+            } catch (error) {
+                console.error(`Error deleting ${type}s:`, error);
+                alert(`An error occurred while deleting the ${type}s`);
+            } finally {
+                // Reset button state
+                this.textContent = originalButtonText;
+                this.disabled = false;
+            }
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Credit Lense application loaded');
+
+    // Handle document selection
+    setupMultipleSelection('document');
+
+    // Handle memo selection
+    setupMultipleSelection('memo');
 
     // Handle document upload form submission
     const uploadForm = document.getElementById('upload-form');

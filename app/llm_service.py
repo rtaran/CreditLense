@@ -16,12 +16,12 @@ class LLMService:
 
     def __init__(self):
         """Initialize the LLM service based on environment configuration."""
-        providers_str = os.getenv("LLM_PROVIDER", "google").lower()
+        providers_str = os.getenv("LLM_PROVIDER", "openai").lower()
         self.available_providers = [p.strip() for p in providers_str.split(",") if p.strip()]
 
-        # If no providers are specified, default to Google
+        # If no providers are specified, default to OpenAI
         if not self.available_providers:
-            self.available_providers = ["google"]
+            self.available_providers = ["openai"]
 
         self.provider = self.available_providers[0]
 

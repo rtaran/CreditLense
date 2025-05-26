@@ -175,8 +175,31 @@ class FinancialAnalyzer:
                         prompt += f"- Net Cash from Financing Activities: {cash_flow['Financing Activities']['Net Cash from Financing Activities']}\n"
 
                 # Add key financial ratios
+                # First check 'ratios' key (primary), then 'financial_ratios' key (fallback)
                 if latest_year in financial_data.get("ratios", {}):
                     ratios = financial_data["ratios"][latest_year]
+                    prompt += "\nKey Financial Ratios:\n"
+                
+                    # Liquidity ratios
+                    if "Liquidity" in ratios:
+                        for ratio_name, ratio_value in ratios["Liquidity"].items():
+                            if ratio_value is not None:
+                                prompt += f"- {ratio_name}: {ratio_value}\n"
+                
+                    # Solvency ratios
+                    if "Solvency" in ratios:
+                        for ratio_name, ratio_value in ratios["Solvency"].items():
+                            if ratio_value is not None:
+                                prompt += f"- {ratio_name}: {ratio_value}\n"
+                
+                    # Profitability ratios
+                    if "Profitability" in ratios:
+                        for ratio_name, ratio_value in ratios["Profitability"].items():
+                            if ratio_value is not None:
+                                prompt += f"- {ratio_name}: {ratio_value}\n"
+                elif latest_year in financial_data.get("financial_ratios", {}):
+                    # Fallback to financial_ratios key
+                    ratios = financial_data["financial_ratios"][latest_year]
                     prompt += "\nKey Financial Ratios:\n"
 
                     # Liquidity ratios

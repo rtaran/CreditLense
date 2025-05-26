@@ -1,6 +1,3 @@
-"""
-Module for extracting and processing financial data from PDFs.
-"""
 import re
 import json
 import logging
@@ -18,18 +15,16 @@ from app.models import (
 )
 from app.llm_service import llm_service
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class FinancialDataExtractor:
     """
-    Class for extracting financial data from PDF text.
+    Extracts financial data from PDF text using various methods.
     """
 
     def __init__(self, pdf_text: str):
         """
-        Initialize the extractor with the PDF text.
+        Initialize with the PDF text to extract data from.
 
         Args:
             pdf_text: The text content of the PDF
@@ -53,136 +48,155 @@ class FinancialDataExtractor:
         """
         logger.info("Starting extraction of financial data using LLM")
 
-        # Truncate the PDF text to avoid exceeding token limits
-        max_doc_length = 12000
-        original_length = len(self.pdf_text)
-        truncated_text = self.pdf_text[:max_doc_length]
+        # Create a prompt for the LLM using the improved method
+        logger.info("Creating improved extraction prompt for LLM")
+        prompt = self._create_improved_extraction_prompt()
 
-        if original_length > max_doc_length:
-            logger.info(f"PDF text truncated from {original_length} to {max_doc_length} characters")
-        else:
-            logger.debug(f"PDF text length ({original_length} characters) is within limits")
-
-        # Create a prompt for the LLM
-        logger.info("Creating extraction prompt for LLM")
-        prompt = self._create_extraction_prompt(truncated_text)
+        # Log a sample of the PDF text to help with debugging
+        text_sample = self.pdf_text[:500] + "..." if len(self.pdf_text) > 500 else self.pdf_text
+        logger.debug(f"PDF text sample for extraction: {text_sample}")
 
         # Generate the financial data using the LLM service
         logger.info(f"Sending prompt to LLM using {provider or 'default'} provider")
         try:
             response = llm_service.generate_text(prompt, provider=provider)
             logger.info(f"Received response from LLM with length {len(response)} characters")
+            # Log a sample of the response for debugging
+            response_sample = response[:500] + "..." if len(response) > 500 else response
+            logger.debug(f"LLM response sample: {response_sample}")
         except Exception as e:
             logger.error(f"Error generating financial data with LLM: {str(e)}")
             # Fall back to regex-based extraction if LLM fails
             logger.info("Falling back to regex-based extraction")
             return self.extract_all_data()
 
-        # Parse the LLM's response to extract the financial data
+        # Parse the LLM's response to extract the financial data using improved parser
         logger.info("Parsing LLM response to extract financial data")
         try:
-            financial_data = self._parse_llm_response(response)
-            logger.info(f"Successfully parsed financial data from LLM response")
-            return financial_data
+            financial_data = self._improved_parse_llm_response(response)
+
+            # Validate the extracted data
+            if self._validate_financial_data(financial_data):
+                logger.info(f"Successfully parsed and validated financial data from LLM response")
+                return financial_data
+            else:
+                logger.warning("Extracted financial data failed validation")
+                # Try one more time with a different provider if available
+                if provider != "openai" and "openai" in llm_service.available_providers:
+                    logger.info("Attempting extraction with OpenAI as fallback")
+                    return self.extract_data_with_llm(provider="openai")
+                # Fall back to regex-based extraction if validation fails
+                logger.info("Falling back to regex-based extraction")
+                return self.extract_all_data()
         except Exception as e:
             logger.error(f"Error parsing LLM response: {str(e)}")
             # Fall back to regex-based extraction if parsing fails
             logger.info("Falling back to regex-based extraction")
             return self.extract_all_data()
 
-    def _create_extraction_prompt(self, pdf_text: str) -> str:
+    def _create_improved_extraction_prompt(self) -> str:
         """
-        Create a prompt for the LLM to extract financial data.
-
-        Args:
-            pdf_text: The text content of the PDF
+        Create an improved prompt for the LLM to extract financial data.
 
         Returns:
             A prompt for the LLM
         """
-        prompt = f"""
-        You are a financial data extraction expert. Extract the following financial data from the provided financial document:
-
-        1. Reporting years (list all years found in the document)
-        2. Balance sheet data for each year, including:
-           - Current Assets (Cash and Cash Equivalents, Short-term Investments, Accounts Receivable, Inventory, Prepaid Expenses, Total Current Assets)
-           - Non-Current Assets (Property, Plant and Equipment, Intangible Assets, Goodwill, Long-term Investments, Deferred Tax Assets, Total Non-Current Assets)
-           - Current Liabilities (Accounts Payable, Short-term Debt, Current Portion of Long-term Debt, Accrued Expenses, Deferred Revenue, Total Current Liabilities)
-           - Non-Current Liabilities (Long-term Debt, Pension Liabilities, Deferred Tax Liabilities, Total Non-Current Liabilities)
-           - Equity (Common Stock, Retained Earnings, Additional Paid-in Capital, Treasury Stock, Total Equity)
-        3. Income statement data for each year, including:
-           - Revenue (Revenue, Net Sales, Total Revenue)
-           - Expenses (Cost of Goods Sold, Gross Profit, Operating Expenses, Research and Development, Selling, General and Administrative, Depreciation and Amortization)
-           - Profit (Operating Income, Interest Expense, Income Before Tax, Income Tax Expense, Net Income)
-           - Per Share Data (Basic Earnings Per Share, Diluted Earnings Per Share, Dividends Per Share)
-        4. Cash flow data for each year, including:
-           - Operating Activities (Net Income, Depreciation and Amortization, Changes in Working Capital, Net Cash from Operating Activities)
-           - Investing Activities (Capital Expenditures, Acquisitions, Purchases of Investments, Sales of Investments, Net Cash from Investing Activities)
-           - Financing Activities (Debt Issuance, Debt Repayment, Dividends Paid, Share Repurchases, Net Cash from Financing Activities)
-           - Summary (Net Change in Cash, Cash at Beginning of Period, Cash at End of Period)
-        5. Financial ratios for each year, including:
-           - Liquidity (Current Ratio, Quick Ratio, Cash Ratio)
-           - Solvency (Debt-to-Equity Ratio, Debt-to-Assets Ratio, Interest Coverage Ratio)
-           - Profitability (Gross Margin, Operating Margin, Net Profit Margin, Return on Assets, Return on Equity)
-           - Efficiency (Asset Turnover, Inventory Turnover, Receivables Turnover)
+        prompt = """
+        You are a financial data extraction expert. I will provide you with text from a financial statement PDF.
+        Your task is to extract the following financial data:
+        1. Years covered in the financial statements
+        2. Balance sheet data for each year
+        3. Income statement data for each year
+        4. Cash flow data for each year
+        5. Financial ratios (if available) or calculate them based on the data
 
         Format your response as a JSON object with the following structure:
-        {{
+        {
             "years": [list of years as integers],
-            "balance_sheet": {{
-                "year1": {{
-                    "category1": {{
-                        "item1": value1,
-                        "item2": value2,
+            "balance_sheet": {
+                "YEAR": {
+                    "Current Assets": {
+                        "Cash and Cash Equivalents": value,
+                        "Accounts Receivable": value,
                         ...
-                    }},
-                    ...
-                }},
-                ...
-            }},
-            "income_statement": {{
-                "year1": {{
-                    "category1": {{
-                        "item1": value1,
-                        "item2": value2,
+                        "Total Current Assets": value
+                    },
+                    "Non-Current Assets": {
                         ...
-                    }},
-                    ...
-                }},
-                ...
-            }},
-            "cash_flow": {{
-                "year1": {{
-                    "category1": {{
-                        "item1": value1,
-                        "item2": value2,
+                        "Total Non-Current Assets": value
+                    },
+                    "Current Liabilities": {
                         ...
-                    }},
-                    ...
-                }},
-                ...
-            }},
-            "ratios": {{
-                "year1": {{
-                    "category1": {{
-                        "ratio1": value1,
-                        "ratio2": value2,
+                        "Total Current Liabilities": value
+                    },
+                    "Non-Current Liabilities": {
                         ...
-                    }},
-                    ...
-                }},
-                ...
-            }}
-        }}
+                        "Total Non-Current Liabilities": value
+                    },
+                    "Equity": {
+                        ...
+                        "Total Equity": value
+                    }
+                }
+            },
+            "income_statement": {
+                "YEAR": {
+                    "Revenue": {
+                        "Revenue": value,
+                        "Total Revenue": value
+                    },
+                    "Expenses": {
+                        "Cost of Goods Sold": value,
+                        ...
+                    },
+                    "Profit": {
+                        "Gross Profit": value,
+                        "Operating Income": value,
+                        "Net Income": value
+                    }
+                }
+            },
+            "cash_flow": {
+                "YEAR": {
+                    "Operating Activities": {
+                        ...
+                        "Net Cash from Operating Activities": value
+                    },
+                    "Investing Activities": {
+                        ...
+                        "Net Cash from Investing Activities": value
+                    },
+                    "Financing Activities": {
+                        ...
+                        "Net Cash from Financing Activities": value
+                    }
+                }
+            },
+            "ratios": {
+                "YEAR": {
+                    "Liquidity": {
+                        "Current Ratio": value,
+                        "Quick Ratio": value
+                    },
+                    "Solvency": {
+                        "Debt-to-Equity Ratio": value,
+                        "Debt-to-Assets Ratio": value
+                    },
+                    "Profitability": {
+                        "Net Profit Margin": value,
+                        "Return on Assets": value,
+                        "Return on Equity": value
+                    }
+                }
+            }
+        }
 
-        If you cannot find a specific value, use null instead. Only include the data you can find in the document.
-
-        DOCUMENT:
-        {pdf_text}
+        Here is the financial statement text:
         """
+        prompt += self.pdf_text
         return prompt
 
-    def _parse_llm_response(self, response: str) -> Dict[str, Any]:
+    def _improved_parse_llm_response(self, response: str) -> Dict[str, Any]:
         """
         Parse the LLM's response to extract the financial data.
 
@@ -229,59 +243,56 @@ class FinancialDataExtractor:
             financial_data: The financial data to validate
 
         Returns:
-            True if the financial data has a valid structure, False otherwise
+            True if the financial data is valid, False otherwise
         """
         # Check if the financial data has the required keys
-        required_keys = ["years", "balance_sheet", "income_statement", "cash_flow", "ratios"]
+        required_keys = ["years", "balance_sheet", "income_statement", "cash_flow"]
         for key in required_keys:
             if key not in financial_data:
                 logger.warning(f"Financial data missing required key: {key}")
                 return False
 
-        # Check if years is a list
+        # Check if the years key is a list
         if not isinstance(financial_data["years"], list):
-            logger.warning("Years is not a list")
+            logger.warning("Financial data years is not a list")
             return False
 
-        # Check if the other keys are dictionaries
-        for key in required_keys[1:]:
+        # Check if the balance_sheet, income_statement, and cash_flow keys are dictionaries
+        for key in ["balance_sheet", "income_statement", "cash_flow"]:
             if not isinstance(financial_data[key], dict):
-                logger.warning(f"{key} is not a dictionary")
+                logger.warning(f"Financial data {key} is not a dictionary")
                 return False
 
+        # All checks passed
         return True
 
     def extract_all_data(self) -> Dict[str, Any]:
         """
-        Extract all financial data from the PDF text.
+        Extract all financial data using regex-based methods.
 
         Returns:
             A dictionary containing all extracted financial data
         """
-        logger.info("Starting extraction of all financial data")
+        logger.info("Extracting all financial data using regex-based methods")
 
-        logger.info("Extracting years from financial document")
-        self._extract_years()
-        logger.info(f"Extracted {len(self.years)} years: {self.years}")
+        # Extract the years
+        self.years = self._extract_years()
+        logger.info(f"Extracted years: {self.years}")
 
-        logger.info("Extracting balance sheet data")
-        self._extract_balance_sheet_data()
-        logger.info(f"Balance sheet data extracted for {len(self.balance_sheet_data)} years")
+        # Extract the balance sheet data
+        self.balance_sheet_data = self._extract_balance_sheet_data()
 
-        logger.info("Extracting income statement data")
-        self._extract_income_statement_data()
-        logger.info(f"Income statement data extracted for {len(self.income_statement_data)} years")
+        # Extract the income statement data
+        self.income_statement_data = self._extract_income_statement_data()
 
-        logger.info("Extracting cash flow data")
-        self._extract_cash_flow_data()
-        logger.info(f"Cash flow data extracted for {len(self.cash_flow_data)} years")
+        # Extract the cash flow data
+        self.cash_flow_data = self._extract_cash_flow_data()
 
-        logger.info("Calculating financial ratios")
-        self._calculate_financial_ratios()
-        logger.info(f"Financial ratios calculated for {len(self.ratios)} years")
+        # Calculate the financial ratios
+        self.ratios = self._calculate_financial_ratios()
 
-        logger.info("Financial data extraction completed successfully")
-        return {
+        # Prepare the result
+        result = {
             "years": self.years,
             "balance_sheet": self.balance_sheet_data,
             "income_statement": self.income_statement_data,
@@ -289,285 +300,475 @@ class FinancialDataExtractor:
             "ratios": self.ratios
         }
 
+        return result
+
     def _extract_years(self) -> List[int]:
         """
-        Extract the reporting years from the PDF text.
+        Extract years from the PDF text.
 
         Returns:
-            A list of years found in the document
+            A list of years
         """
-        # Look for years in the format YYYY or 'Year ended December 31, YYYY'
-        year_pattern = r'\b(20\d{2})\b'
-        years = re.findall(year_pattern, self.pdf_text)
-
-        # Convert to integers and remove duplicates
-        unique_years = sorted(list(set([int(year) for year in years])))
-
-        # Get current year
-        from datetime import datetime
-        current_year = datetime.now().year
+        # Use regex to find years in the text
+        year_pattern = r'\b(19|20)\d{2}\b'
+        years = [int(year) for year in re.findall(year_pattern, self.pdf_text)]
 
         # Filter out future years
-        valid_years = [year for year in unique_years if year <= current_year]
+        current_year = datetime.now().year
+        years = [year for year in years if year <= current_year]
 
-        if not valid_years:
-            logger.warning("No valid years found in document. Using all extracted years.")
-            valid_years = unique_years
+        # Remove duplicates and sort
+        years = sorted(list(set(years)))
 
-        # Keep only the most recent years (typically financial statements show 2-3 years)
-        self.years = valid_years[-3:] if len(valid_years) > 3 else valid_years
-
-        logger.info(f"Extracted years: {self.years} (current year: {current_year})")
-
-        return self.years
+        return years
 
     def _extract_balance_sheet_data(self) -> Dict[int, Dict[str, Dict[str, float]]]:
         """
         Extract balance sheet data from the PDF text.
 
         Returns:
-            A dictionary mapping years to balance sheet items
+            A dictionary containing the balance sheet data for each year
         """
-        # Common balance sheet items to look for
-        balance_sheet_items = {
-            "Current Assets": [
-                "Cash and Cash Equivalents",
-                "Short-term Investments",
-                "Accounts Receivable",
-                "Inventory",
-                "Prepaid Expenses",
-                "Total Current Assets"
-            ],
-            "Non-Current Assets": [
-                "Property, Plant and Equipment",
-                "Intangible Assets",
-                "Goodwill",
-                "Long-term Investments",
-                "Deferred Tax Assets",
-                "Total Non-Current Assets"
-            ],
-            "Current Liabilities": [
-                "Accounts Payable",
-                "Short-term Debt",
-                "Current Portion of Long-term Debt",
-                "Accrued Expenses",
-                "Deferred Revenue",
-                "Total Current Liabilities"
-            ],
-            "Non-Current Liabilities": [
-                "Long-term Debt",
-                "Pension Liabilities",
-                "Deferred Tax Liabilities",
-                "Total Non-Current Liabilities"
-            ],
-            "Equity": [
-                "Common Stock",
-                "Retained Earnings",
-                "Additional Paid-in Capital",
-                "Treasury Stock",
-                "Total Equity"
-            ]
-        }
+        # Initialize the result
+        result = {}
 
-        # Initialize the balance sheet data dictionary
+        # Extract the balance sheet data for each year
         for year in self.years:
-            self.balance_sheet_data[year] = {}
-            for category, items in balance_sheet_items.items():
-                self.balance_sheet_data[year][category] = {}
-                for item in items:
-                    self.balance_sheet_data[year][category][item] = self._extract_value_for_item(item, year)
+            result[year] = {
+                "Current Assets": {},
+                "Non-Current Assets": {},
+                "Current Liabilities": {},
+                "Non-Current Liabilities": {},
+                "Equity": {}
+            }
 
-        return self.balance_sheet_data
+            # Get the context around the year mention
+            context = self._get_year_context(year)
+            if not context:
+                continue
+
+            # Extract Current Assets
+            cash = self._extract_value_for_item("Cash and Cash Equivalents", year)
+            if cash is not None:
+                result[year]["Current Assets"]["Cash and Cash Equivalents"] = cash
+
+            accounts_receivable = self._extract_value_for_item("Accounts Receivable", year)
+            if accounts_receivable is not None:
+                result[year]["Current Assets"]["Accounts Receivable"] = accounts_receivable
+
+            inventory = self._extract_value_for_item("Inventory", year)
+            if inventory is not None:
+                result[year]["Current Assets"]["Inventory"] = inventory
+
+            prepaid_expenses = self._extract_value_for_item("Prepaid Expenses", year)
+            if prepaid_expenses is not None:
+                result[year]["Current Assets"]["Prepaid Expenses"] = prepaid_expenses
+
+            total_current_assets = self._extract_value_for_item("Total Current Assets", year)
+            if total_current_assets is not None:
+                result[year]["Current Assets"]["Total Current Assets"] = total_current_assets
+
+            # Extract Non-Current Assets
+            property_plant_equipment = self._extract_value_for_item("Property, Plant and Equipment", year)
+            if property_plant_equipment is not None:
+                result[year]["Non-Current Assets"]["Property, Plant and Equipment"] = property_plant_equipment
+
+            intangible_assets = self._extract_value_for_item("Intangible Assets", year)
+            if intangible_assets is not None:
+                result[year]["Non-Current Assets"]["Intangible Assets"] = intangible_assets
+
+            investments = self._extract_value_for_item("Investments", year)
+            if investments is not None:
+                result[year]["Non-Current Assets"]["Investments"] = investments
+
+            total_non_current_assets = self._extract_value_for_item("Total Non-Current Assets", year)
+            if total_non_current_assets is not None:
+                result[year]["Non-Current Assets"]["Total Non-Current Assets"] = total_non_current_assets
+
+            # Extract Current Liabilities
+            accounts_payable = self._extract_value_for_item("Accounts Payable", year)
+            if accounts_payable is not None:
+                result[year]["Current Liabilities"]["Accounts Payable"] = accounts_payable
+
+            short_term_debt = self._extract_value_for_item("Short-term Debt", year)
+            if short_term_debt is not None:
+                result[year]["Current Liabilities"]["Short-term Debt"] = short_term_debt
+
+            accrued_expenses = self._extract_value_for_item("Accrued Expenses", year)
+            if accrued_expenses is not None:
+                result[year]["Current Liabilities"]["Accrued Expenses"] = accrued_expenses
+
+            total_current_liabilities = self._extract_value_for_item("Total Current Liabilities", year)
+            if total_current_liabilities is not None:
+                result[year]["Current Liabilities"]["Total Current Liabilities"] = total_current_liabilities
+
+            # Extract Non-Current Liabilities
+            long_term_debt = self._extract_value_for_item("Long-term Debt", year)
+            if long_term_debt is not None:
+                result[year]["Non-Current Liabilities"]["Long-term Debt"] = long_term_debt
+
+            deferred_tax_liabilities = self._extract_value_for_item("Deferred Tax Liabilities", year)
+            if deferred_tax_liabilities is not None:
+                result[year]["Non-Current Liabilities"]["Deferred Tax Liabilities"] = deferred_tax_liabilities
+
+            total_non_current_liabilities = self._extract_value_for_item("Total Non-Current Liabilities", year)
+            if total_non_current_liabilities is not None:
+                result[year]["Non-Current Liabilities"]["Total Non-Current Liabilities"] = total_non_current_liabilities
+
+            # Extract Equity
+            common_stock = self._extract_value_for_item("Common Stock", year)
+            if common_stock is not None:
+                result[year]["Equity"]["Common Stock"] = common_stock
+
+            retained_earnings = self._extract_value_for_item("Retained Earnings", year)
+            if retained_earnings is not None:
+                result[year]["Equity"]["Retained Earnings"] = retained_earnings
+
+            total_equity = self._extract_value_for_item("Total Equity", year)
+            if total_equity is not None:
+                result[year]["Equity"]["Total Equity"] = total_equity
+
+        return result
 
     def _extract_income_statement_data(self) -> Dict[int, Dict[str, Dict[str, float]]]:
         """
         Extract income statement data from the PDF text.
 
         Returns:
-            A dictionary mapping years to income statement items
+            A dictionary containing the income statement data for each year
         """
-        # Common income statement items to look for
-        income_statement_items = {
-            "Revenue": [
-                "Revenue",
-                "Net Sales",
-                "Total Revenue"
-            ],
-            "Expenses": [
-                "Cost of Goods Sold",
-                "Gross Profit",
-                "Operating Expenses",
-                "Research and Development",
-                "Selling, General and Administrative",
-                "Depreciation and Amortization"
-            ],
-            "Profit": [
-                "Operating Income",
-                "Interest Expense",
-                "Income Before Tax",
-                "Income Tax Expense",
-                "Net Income"
-            ],
-            "Per Share Data": [
-                "Basic Earnings Per Share",
-                "Diluted Earnings Per Share",
-                "Dividends Per Share"
-            ]
-        }
+        # Initialize the result
+        result = {}
 
-        # Initialize the income statement data dictionary
+        # Extract the income statement data for each year
         for year in self.years:
-            self.income_statement_data[year] = {}
-            for category, items in income_statement_items.items():
-                self.income_statement_data[year][category] = {}
-                for item in items:
-                    self.income_statement_data[year][category][item] = self._extract_value_for_item(item, year)
+            result[year] = {
+                "Revenue": {},
+                "Expenses": {},
+                "Profit": {}
+            }
 
-        return self.income_statement_data
+            # Get the context around the year mention
+            context = self._get_year_context(year)
+            if not context:
+                continue
+
+            # Extract Revenue items
+            revenue = self._extract_value_for_item("Revenue", year)
+            if revenue is not None:
+                result[year]["Revenue"]["Revenue"] = revenue
+
+            sales = self._extract_value_for_item("Sales", year)
+            if sales is not None:
+                result[year]["Revenue"]["Sales"] = sales
+
+            service_revenue = self._extract_value_for_item("Service Revenue", year)
+            if service_revenue is not None:
+                result[year]["Revenue"]["Service Revenue"] = service_revenue
+
+            total_revenue = self._extract_value_for_item("Total Revenue", year)
+            if total_revenue is not None:
+                result[year]["Revenue"]["Total Revenue"] = total_revenue
+
+            # Extract Expense items
+            cost_of_goods_sold = self._extract_value_for_item("Cost of Goods Sold", year)
+            if cost_of_goods_sold is not None:
+                result[year]["Expenses"]["Cost of Goods Sold"] = cost_of_goods_sold
+
+            operating_expenses = self._extract_value_for_item("Operating Expenses", year)
+            if operating_expenses is not None:
+                result[year]["Expenses"]["Operating Expenses"] = operating_expenses
+
+            selling_general_admin = self._extract_value_for_item("Selling, General and Administrative", year)
+            if selling_general_admin is not None:
+                result[year]["Expenses"]["Selling, General and Administrative"] = selling_general_admin
+
+            research_development = self._extract_value_for_item("Research and Development", year)
+            if research_development is not None:
+                result[year]["Expenses"]["Research and Development"] = research_development
+
+            depreciation_amortization = self._extract_value_for_item("Depreciation and Amortization", year)
+            if depreciation_amortization is not None:
+                result[year]["Expenses"]["Depreciation and Amortization"] = depreciation_amortization
+
+            interest_expense = self._extract_value_for_item("Interest Expense", year)
+            if interest_expense is not None:
+                result[year]["Expenses"]["Interest Expense"] = interest_expense
+
+            income_tax_expense = self._extract_value_for_item("Income Tax Expense", year)
+            if income_tax_expense is not None:
+                result[year]["Expenses"]["Income Tax Expense"] = income_tax_expense
+
+            total_expenses = self._extract_value_for_item("Total Expenses", year)
+            if total_expenses is not None:
+                result[year]["Expenses"]["Total Expenses"] = total_expenses
+
+            # Extract Profit items
+            gross_profit = self._extract_value_for_item("Gross Profit", year)
+            if gross_profit is not None:
+                result[year]["Profit"]["Gross Profit"] = gross_profit
+
+            operating_income = self._extract_value_for_item("Operating Income", year)
+            if operating_income is not None:
+                result[year]["Profit"]["Operating Income"] = operating_income
+
+            income_before_tax = self._extract_value_for_item("Income Before Tax", year)
+            if income_before_tax is not None:
+                result[year]["Profit"]["Income Before Tax"] = income_before_tax
+
+            net_income = self._extract_value_for_item("Net Income", year)
+            if net_income is not None:
+                result[year]["Profit"]["Net Income"] = net_income
+
+        return result
 
     def _extract_cash_flow_data(self) -> Dict[int, Dict[str, Dict[str, float]]]:
         """
         Extract cash flow data from the PDF text.
 
         Returns:
-            A dictionary mapping years to cash flow items
+            A dictionary containing the cash flow data for each year
         """
-        # Common cash flow items to look for
-        cash_flow_items = {
-            "Operating Activities": [
-                "Net Income",
-                "Depreciation and Amortization",
-                "Changes in Working Capital",
-                "Net Cash from Operating Activities"
-            ],
-            "Investing Activities": [
-                "Capital Expenditures",
-                "Acquisitions",
-                "Purchases of Investments",
-                "Sales of Investments",
-                "Net Cash from Investing Activities"
-            ],
-            "Financing Activities": [
-                "Debt Issuance",
-                "Debt Repayment",
-                "Dividends Paid",
-                "Share Repurchases",
-                "Net Cash from Financing Activities"
-            ],
-            "Summary": [
-                "Net Change in Cash",
-                "Cash at Beginning of Period",
-                "Cash at End of Period"
-            ]
-        }
+        # Initialize the result
+        result = {}
 
-        # Initialize the cash flow data dictionary
+        # Extract the cash flow data for each year
         for year in self.years:
-            self.cash_flow_data[year] = {}
-            for category, items in cash_flow_items.items():
-                self.cash_flow_data[year][category] = {}
-                for item in items:
-                    self.cash_flow_data[year][category][item] = self._extract_value_for_item(item, year)
+            result[year] = {
+                "Operating Activities": {},
+                "Investing Activities": {},
+                "Financing Activities": {}
+            }
 
-        return self.cash_flow_data
+            # Get the context around the year mention
+            context = self._get_year_context(year)
+            if not context:
+                continue
+
+            # Extract Operating Activities items
+            net_income = self._extract_value_for_item("Net Income", year)
+            if net_income is not None:
+                result[year]["Operating Activities"]["Net Income"] = net_income
+
+            depreciation_amortization = self._extract_value_for_item("Depreciation and Amortization", year)
+            if depreciation_amortization is not None:
+                result[year]["Operating Activities"]["Depreciation and Amortization"] = depreciation_amortization
+
+            changes_in_working_capital = self._extract_value_for_item("Changes in Working Capital", year)
+            if changes_in_working_capital is not None:
+                result[year]["Operating Activities"]["Changes in Working Capital"] = changes_in_working_capital
+
+            net_cash_operating = self._extract_value_for_item("Net Cash from Operating Activities", year)
+            if net_cash_operating is not None:
+                result[year]["Operating Activities"]["Net Cash from Operating Activities"] = net_cash_operating
+
+            # Extract Investing Activities items
+            capital_expenditures = self._extract_value_for_item("Capital Expenditures", year)
+            if capital_expenditures is not None:
+                result[year]["Investing Activities"]["Capital Expenditures"] = capital_expenditures
+
+            acquisitions = self._extract_value_for_item("Acquisitions", year)
+            if acquisitions is not None:
+                result[year]["Investing Activities"]["Acquisitions"] = acquisitions
+
+            investments = self._extract_value_for_item("Investments", year)
+            if investments is not None:
+                result[year]["Investing Activities"]["Investments"] = investments
+
+            net_cash_investing = self._extract_value_for_item("Net Cash from Investing Activities", year)
+            if net_cash_investing is not None:
+                result[year]["Investing Activities"]["Net Cash from Investing Activities"] = net_cash_investing
+
+            # Extract Financing Activities items
+            debt_issuance = self._extract_value_for_item("Debt Issuance", year)
+            if debt_issuance is not None:
+                result[year]["Financing Activities"]["Debt Issuance"] = debt_issuance
+
+            debt_repayment = self._extract_value_for_item("Debt Repayment", year)
+            if debt_repayment is not None:
+                result[year]["Financing Activities"]["Debt Repayment"] = debt_repayment
+
+            dividends_paid = self._extract_value_for_item("Dividends Paid", year)
+            if dividends_paid is not None:
+                result[year]["Financing Activities"]["Dividends Paid"] = dividends_paid
+
+            stock_repurchase = self._extract_value_for_item("Stock Repurchase", year)
+            if stock_repurchase is not None:
+                result[year]["Financing Activities"]["Stock Repurchase"] = stock_repurchase
+
+            net_cash_financing = self._extract_value_for_item("Net Cash from Financing Activities", year)
+            if net_cash_financing is not None:
+                result[year]["Financing Activities"]["Net Cash from Financing Activities"] = net_cash_financing
+
+        return result
 
     def _calculate_financial_ratios(self) -> Dict[int, Dict[str, Dict[str, float]]]:
         """
         Calculate financial ratios based on the extracted data.
 
         Returns:
-            A dictionary mapping years to financial ratios
+            A dictionary containing the financial ratios for each year
         """
-        # Define ratio categories and formulas
-        ratio_categories = {
-            "Liquidity": [
-                "Current Ratio",
-                "Quick Ratio",
-                "Cash Ratio"
-            ],
-            "Solvency": [
-                "Debt-to-Equity Ratio",
-                "Debt-to-Assets Ratio",
-                "Interest Coverage Ratio"
-            ],
-            "Profitability": [
-                "Gross Margin",
-                "Operating Margin",
-                "Net Profit Margin",
-                "Return on Assets (ROA)",
-                "Return on Equity (ROE)"
-            ],
-            "Efficiency": [
-                "Asset Turnover",
-                "Inventory Turnover",
-                "Receivables Turnover"
-            ]
-        }
+        # Initialize the result
+        result = {}
 
-        # Initialize the ratios dictionary
+        # Calculate the financial ratios for each year
         for year in self.years:
-            self.ratios[year] = {}
-            for category, items in ratio_categories.items():
-                self.ratios[year][category] = {}
-                for item in items:
-                    self.ratios[year][category][item] = self._calculate_ratio(item, year)
+            result[year] = {
+                "Liquidity": {},
+                "Solvency": {},
+                "Profitability": {}
+            }
 
-        return self.ratios
+            # Get the balance sheet data for the year
+            balance_sheet = self.balance_sheet_data.get(year, {})
+
+            # Get the income statement data for the year
+            income_statement = self.income_statement_data.get(year, {})
+
+            # Get the cash flow data for the year
+            cash_flow = self.cash_flow_data.get(year, {})
+
+            # Calculate Liquidity Ratios
+
+            # Current Ratio = Current Assets / Current Liabilities
+            current_assets = self._get_nested_value(balance_sheet, ["Current Assets", "Total Current Assets"])
+            current_liabilities = self._get_nested_value(balance_sheet, ["Current Liabilities", "Total Current Liabilities"])
+
+            if current_assets is not None and current_liabilities is not None and current_liabilities != 0:
+                result[year]["Liquidity"]["Current Ratio"] = current_assets / current_liabilities
+
+            # Quick Ratio = (Current Assets - Inventory) / Current Liabilities
+            inventory = self._get_nested_value(balance_sheet, ["Current Assets", "Inventory"])
+
+            if current_assets is not None and inventory is not None and current_liabilities is not None and current_liabilities != 0:
+                result[year]["Liquidity"]["Quick Ratio"] = (current_assets - inventory) / current_liabilities
+
+            # Calculate Solvency Ratios
+
+            # Debt-to-Equity Ratio = Total Liabilities / Total Equity
+            total_liabilities = 0
+            if current_liabilities is not None:
+                total_liabilities += current_liabilities
+
+            non_current_liabilities = self._get_nested_value(balance_sheet, ["Non-Current Liabilities", "Total Non-Current Liabilities"])
+            if non_current_liabilities is not None:
+                total_liabilities += non_current_liabilities
+
+            total_equity = self._get_nested_value(balance_sheet, ["Equity", "Total Equity"])
+
+            if total_liabilities > 0 and total_equity is not None and total_equity != 0:
+                result[year]["Solvency"]["Debt-to-Equity Ratio"] = total_liabilities / total_equity
+
+            # Debt-to-Assets Ratio = Total Liabilities / Total Assets
+            total_assets = 0
+            if current_assets is not None:
+                total_assets += current_assets
+
+            non_current_assets = self._get_nested_value(balance_sheet, ["Non-Current Assets", "Total Non-Current Assets"])
+            if non_current_assets is not None:
+                total_assets += non_current_assets
+
+            if total_liabilities > 0 and total_assets > 0:
+                result[year]["Solvency"]["Debt-to-Assets Ratio"] = total_liabilities / total_assets
+
+            # Calculate Profitability Ratios
+
+            # Net Profit Margin = Net Income / Total Revenue
+            net_income = self._get_nested_value(income_statement, ["Profit", "Net Income"])
+            total_revenue = self._get_nested_value(income_statement, ["Revenue", "Total Revenue"])
+
+            if net_income is not None and total_revenue is not None and total_revenue != 0:
+                result[year]["Profitability"]["Net Profit Margin"] = net_income / total_revenue
+
+            # Return on Assets (ROA) = Net Income / Total Assets
+            if net_income is not None and total_assets > 0:
+                result[year]["Profitability"]["Return on Assets"] = net_income / total_assets
+
+            # Return on Equity (ROE) = Net Income / Total Equity
+            if net_income is not None and total_equity is not None and total_equity != 0:
+                result[year]["Profitability"]["Return on Equity"] = net_income / total_equity
+
+        return result
 
     def _extract_value_for_item(self, item: str, year: int) -> Optional[float]:
         """
-        Extract a numerical value for a specific item and year from the PDF text.
+        Extract a value for a specific item and year.
 
         Args:
-            item: The name of the financial item
+            item: The item to extract the value for
             year: The year to extract the value for
 
         Returns:
-            The extracted value as a float, or None if not found
+            The extracted value, or None if it cannot be extracted
         """
+        # Get the context around the year mention
+        context = self._get_year_context(year)
+        if not context:
+            return None
+
+        # Use regex to find the item and its value
         # This is a simplified implementation
-        # In a real-world scenario, this would use more sophisticated pattern matching
-        # or NLP techniques to extract values accurately
+        # In a real-world scenario, you would use more sophisticated regex patterns
+        # or NLP techniques to extract the values
 
-        # Look for patterns like "Item Name ... $X,XXX" near the year
-        year_str = str(year)
-        item_pattern = fr'{re.escape(item)}[^\n]*?(\d+(?:,\d+)*(?:\.\d+)?)'
-
-        # Search for the item in the context of the year
-        year_context = self._get_year_context(year)
-        if year_context:
-            matches = re.findall(item_pattern, year_context)
-            if matches:
-                # Clean up and convert to float
-                value_str = matches[0].replace(',', '')
-                try:
-                    return float(value_str)
-                except ValueError:
-                    return None
+        # Example pattern: "Item Name 1000"
+        pattern = rf'{re.escape(item)}\s+(\d+(?:\.\d+)?)'
+        match = re.search(pattern, context)
+        if match:
+            return float(match.group(1))
 
         return None
 
     def _get_year_context(self, year: int) -> Optional[str]:
         """
-        Get the text context around a specific year mention.
+        Get the context around a year mention in the PDF text.
 
         Args:
-            year: The year to find context for
+            year: The year to get the context for
 
         Returns:
-            A substring of the PDF text around the year mention, or None if not found
+            The context, or None if the year is not found
         """
-        year_str = str(year)
-        year_index = self.pdf_text.find(year_str)
-
-        if year_index == -1:
+        # Find the year in the text
+        year_pattern = rf'\b{year}\b'
+        match = re.search(year_pattern, self.pdf_text)
+        if not match:
             return None
 
-        # Get a chunk of text around the year mention
-        start_index = max(0, year_index - 5000)
-        end_index = min(len(self.pdf_text), year_index + 5000)
+        # Get the context around the year mention
+        # This is a simplified implementation
+        # In a real-world scenario, you would use more sophisticated techniques
+        # to extract the relevant context
 
-        return self.pdf_text[start_index:end_index]
+        # Get 500 characters before and after the year mention
+        start = max(0, match.start() - 500)
+        end = min(len(self.pdf_text), match.end() + 500)
+        context = self.pdf_text[start:end]
+
+        return context
+
+    def _get_nested_value(self, data: Dict[str, Any], keys: List[str]) -> Optional[float]:
+        """
+        Get a nested value from a dictionary.
+
+        Args:
+            data: The dictionary to get the value from
+            keys: The keys to traverse to get the value
+
+        Returns:
+            The value, or None if it cannot be found
+        """
+        try:
+            current = data
+            for key in keys:
+                if key in current:
+                    current = current[key]
+                else:
+                    return None
+            return current if isinstance(current, (int, float)) else None
+        except Exception:
+            return None
 
     def _calculate_ratio(self, ratio_name: str, year: int) -> Optional[float]:
         """
@@ -578,38 +779,48 @@ class FinancialDataExtractor:
             year: The year to calculate the ratio for
 
         Returns:
-            The calculated ratio as a float, or None if it cannot be calculated
+            The calculated ratio, or None if it cannot be calculated
         """
-        # This is a simplified implementation
-        # In a real-world scenario, this would use the actual financial data
-        # to calculate ratios accurately
+        try:
+            # Get the balance sheet data for the year
+            balance_sheet = self.balance_sheet_data.get(year, {})
 
-        if ratio_name == "Current Ratio":
-            current_assets = self._get_value_from_dict(self.balance_sheet_data, [year, "Current Assets", "Total Current Assets"])
-            current_liabilities = self._get_value_from_dict(self.balance_sheet_data, [year, "Current Liabilities", "Total Current Liabilities"])
+            # Get the income statement data for the year
+            income_statement = self.income_statement_data.get(year, {})
 
-            if current_assets is not None and current_liabilities is not None and current_liabilities != 0:
-                return current_assets / current_liabilities
+            # Calculate the ratio based on its name
+            if ratio_name == "Current Ratio":
+                current_assets = self._get_value_from_dict(balance_sheet, ["Current Assets", "Total Current Assets"])
+                current_liabilities = self._get_value_from_dict(balance_sheet, ["Current Liabilities", "Total Current Liabilities"])
+                if current_assets is not None and current_liabilities is not None and current_liabilities != 0:
+                    return current_assets / current_liabilities
 
-        elif ratio_name == "Debt-to-Equity Ratio":
-            current_liabilities = self._get_value_from_dict(self.balance_sheet_data, [year, "Current Liabilities", "Total Current Liabilities"]) or 0
-            non_current_liabilities = self._get_value_from_dict(self.balance_sheet_data, [year, "Non-Current Liabilities", "Total Non-Current Liabilities"]) or 0
-            total_liabilities = current_liabilities + non_current_liabilities
-            total_equity = self._get_value_from_dict(self.balance_sheet_data, [year, "Equity", "Total Equity"])
+            elif ratio_name == "Quick Ratio":
+                current_assets = self._get_value_from_dict(balance_sheet, ["Current Assets", "Total Current Assets"])
+                inventory = self._get_value_from_dict(balance_sheet, ["Current Assets", "Inventory"])
+                current_liabilities = self._get_value_from_dict(balance_sheet, ["Current Liabilities", "Total Current Liabilities"])
+                if current_assets is not None and inventory is not None and current_liabilities is not None and current_liabilities != 0:
+                    return (current_assets - inventory) / current_liabilities
 
-            if total_liabilities is not None and total_equity is not None and total_equity != 0:
-                return total_liabilities / total_equity
+            elif ratio_name == "Debt-to-Equity Ratio":
+                total_liabilities = self._get_value_from_dict(balance_sheet, ["Current Liabilities", "Total Current Liabilities"])
+                total_liabilities += self._get_value_from_dict(balance_sheet, ["Non-Current Liabilities", "Total Non-Current Liabilities"]) or 0
+                total_equity = self._get_value_from_dict(balance_sheet, ["Equity", "Total Equity"])
+                if total_liabilities is not None and total_equity is not None and total_equity != 0:
+                    return total_liabilities / total_equity
 
-        elif ratio_name == "Net Profit Margin":
-            net_income = self._get_value_from_dict(self.income_statement_data, [year, "Profit", "Net Income"])
-            revenue = self._get_value_from_dict(self.income_statement_data, [year, "Revenue", "Total Revenue"])
+            elif ratio_name == "Net Profit Margin":
+                net_income = self._get_value_from_dict(income_statement, ["Profit", "Net Income"])
+                total_revenue = self._get_value_from_dict(income_statement, ["Revenue", "Total Revenue"])
+                if net_income is not None and total_revenue is not None and total_revenue != 0:
+                    return (net_income / total_revenue) * 100
 
-            if net_income is not None and revenue is not None and revenue != 0:
-                return (net_income / revenue) * 100  # As percentage
+            # Add more ratios as needed
 
-        # Add more ratio calculations as needed
-
-        return None
+            return None
+        except Exception as e:
+            logger.error(f"Error calculating ratio {ratio_name} for year {year}: {str(e)}")
+            return None
 
     def _get_value_from_dict(self, data_dict: Dict, keys: List) -> Optional[float]:
         """
@@ -617,146 +828,135 @@ class FinancialDataExtractor:
 
         Args:
             data_dict: The dictionary to get the value from
-            keys: A list of keys to navigate the nested dictionary
+            keys: A list of keys to navigate the dictionary
 
         Returns:
-            The value if found, or None if any key is missing
+            The value, or None if the key path doesn't exist
         """
-        current = data_dict
-        for key in keys:
-            if key not in current:
-                return None
-            current = current[key]
+        try:
+            current = data_dict
+            for key in keys:
+                if key in current:
+                    current = current[key]
+                else:
+                    return None
+            return current if isinstance(current, (int, float)) else None
+        except Exception:
+            return None
 
-        return current
 
 def store_financial_data(db: Session, document_id: int, financial_data: Dict[str, Any]) -> None:
     """
-    Store extracted financial data in the database.
+    Store financial data in the database.
 
     Args:
         db: The database session
-        document_id: The ID of the document to associate the data with
-        financial_data: The extracted financial data
+        document_id: The ID of the document
+        financial_data: The financial data to store
     """
-    logger.info(f"Starting to store financial data for document ID {document_id}")
+    logger.info(f"Storing financial data for document {document_id}")
 
-    # Get the years from the financial data
+    # Get the document
+    document = db.query(CompanyData).filter(CompanyData.document_id == document_id).first()
+    if not document:
+        logger.error(f"Document {document_id} not found")
+        return
+
+    # Extract the years
     years = financial_data.get("years", [])
-    logger.info(f"Found {len(years)} years of financial data to store: {years}")
+    if not years:
+        logger.warning(f"No years found in financial data for document {document_id}")
+        return
 
-    balance_sheet_count = 0
-    income_statement_count = 0
-    cash_flow_count = 0
-    ratio_count = 0
-
-    # Store data for each year
+    # Store the financial data for each year
     for year in years:
-        logger.info(f"Processing financial data for year {year}")
-
-        # Create a FinancialYear record
+        # Create a financial year
         financial_year = FinancialYear(
             document_id=document_id,
             year=year
         )
         db.add(financial_year)
         db.flush()  # Flush to get the year_id
-        logger.info(f"Created FinancialYear record with ID {financial_year.year_id} for year {year}")
 
-        # Store balance sheet items
-        logger.info(f"Storing balance sheet items for year {year}")
-        balance_sheet_data = financial_data.get("balance_sheet", {}).get(year, {})
-        year_balance_sheet_count = 0
-        for category, items in balance_sheet_data.items():
+        # Store balance sheet data
+        balance_sheet = financial_data.get("balance_sheet", {}).get(str(year), {})
+        for category, items in balance_sheet.items():
             for item_name, item_value in items.items():
-                if item_value is not None:
-                    balance_sheet_item = BalanceSheetItem(
-                        year_id=financial_year.year_id,
-                        item_name=item_name,
-                        item_value=item_value,
-                        item_category=category
-                    )
-                    db.add(balance_sheet_item)
-                    year_balance_sheet_count += 1
-        logger.info(f"Stored {year_balance_sheet_count} balance sheet items for year {year}")
-        balance_sheet_count += year_balance_sheet_count
+                balance_sheet_item = BalanceSheetItem(
+                    year_id=financial_year.year_id,
+                    item_name=item_name,
+                    item_value=item_value,
+                    item_category=category
+                )
+                db.add(balance_sheet_item)
 
-        # Store income statement items
-        logger.info(f"Storing income statement items for year {year}")
-        income_statement_data = financial_data.get("income_statement", {}).get(year, {})
-        year_income_statement_count = 0
-        for category, items in income_statement_data.items():
+        # Store income statement data
+        income_statement = financial_data.get("income_statement", {}).get(str(year), {})
+        for category, items in income_statement.items():
             for item_name, item_value in items.items():
-                if item_value is not None:
-                    income_statement_item = IncomeStatementItem(
-                        year_id=financial_year.year_id,
-                        item_name=item_name,
-                        item_value=item_value,
-                        item_category=category
-                    )
-                    db.add(income_statement_item)
-                    year_income_statement_count += 1
-        logger.info(f"Stored {year_income_statement_count} income statement items for year {year}")
-        income_statement_count += year_income_statement_count
+                income_statement_item = IncomeStatementItem(
+                    year_id=financial_year.year_id,
+                    item_name=item_name,
+                    item_value=item_value,
+                    item_category=category
+                )
+                db.add(income_statement_item)
 
-        # Store cash flow items
-        logger.info(f"Storing cash flow items for year {year}")
-        cash_flow_data = financial_data.get("cash_flow", {}).get(year, {})
-        year_cash_flow_count = 0
-        for category, items in cash_flow_data.items():
+        # Store cash flow data
+        cash_flow = financial_data.get("cash_flow", {}).get(str(year), {})
+        for category, items in cash_flow.items():
             for item_name, item_value in items.items():
-                if item_value is not None:
-                    cash_flow_item = CashFlowItem(
-                        year_id=financial_year.year_id,
-                        item_name=item_name,
-                        item_value=item_value,
-                        item_category=category
-                    )
-                    db.add(cash_flow_item)
-                    year_cash_flow_count += 1
-        logger.info(f"Stored {year_cash_flow_count} cash flow items for year {year}")
-        cash_flow_count += year_cash_flow_count
+                cash_flow_item = CashFlowItem(
+                    year_id=financial_year.year_id,
+                    item_name=item_name,
+                    item_value=item_value,
+                    item_category=category
+                )
+                db.add(cash_flow_item)
 
         # Store financial ratios
-        logger.info(f"Storing financial ratios for year {year}")
-        ratios_data = financial_data.get("ratios", {}).get(year, {})
-        year_ratio_count = 0
-        for category, items in ratios_data.items():
+        ratios = financial_data.get("ratios", {}).get(str(year), {})
+        for category, items in ratios.items():
             for ratio_name, ratio_value in items.items():
-                if ratio_value is not None:
-                    financial_ratio = FinancialRatio(
-                        year_id=financial_year.year_id,
-                        ratio_name=ratio_name,
-                        ratio_value=ratio_value,
-                        ratio_category=category
-                    )
-                    db.add(financial_ratio)
-                    year_ratio_count += 1
-        logger.info(f"Stored {year_ratio_count} financial ratios for year {year}")
-        ratio_count += year_ratio_count
+                financial_ratio = FinancialRatio(
+                    year_id=financial_year.year_id,
+                    ratio_name=ratio_name,
+                    ratio_value=ratio_value,
+                    ratio_category=category
+                )
+                db.add(financial_ratio)
 
-    # Commit all changes
-    logger.info("Committing all financial data to database")
+    # Commit the changes
     db.commit()
-    logger.info(f"Successfully stored financial data for document ID {document_id}: {len(years)} years, {balance_sheet_count} balance sheet items, {income_statement_count} income statement items, {cash_flow_count} cash flow items, {ratio_count} financial ratios")
+    logger.info(f"Financial data stored successfully for document {document_id}")
+
 
 def get_financial_data_for_document(db: Session, document_id: int) -> Dict[str, Any]:
     """
-    Retrieve all financial data for a document.
+    Get financial data for a document.
 
     Args:
         db: The database session
-        document_id: The ID of the document to get data for
+        document_id: The ID of the document
 
     Returns:
-        A dictionary containing all financial data for the document
+        A dictionary containing the financial data
     """
-    logger.info(f"Retrieving financial data for document ID {document_id}")
+    logger.info(f"Getting financial data for document {document_id}")
 
-    # Get all financial years for the document
+    # Get the document
+    document = db.query(CompanyData).filter(CompanyData.document_id == document_id).first()
+    if not document:
+        logger.error(f"Document {document_id} not found")
+        return {}
+
+    # Get the financial years
     financial_years = db.query(FinancialYear).filter(FinancialYear.document_id == document_id).all()
-    logger.info(f"Found {len(financial_years)} financial years for document ID {document_id}")
+    if not financial_years:
+        logger.warning(f"No financial years found for document {document_id}")
+        return {}
 
+    # Initialize the result
     result = {
         "years": [],
         "balance_sheet": {},
@@ -765,59 +965,46 @@ def get_financial_data_for_document(db: Session, document_id: int) -> Dict[str, 
         "ratios": {}
     }
 
-    balance_sheet_count = 0
-    income_statement_count = 0
-    cash_flow_count = 0
-    ratio_count = 0
+    # Extract the years
+    result["years"] = [year.year for year in financial_years]
 
-    for financial_year in financial_years:
-        year = financial_year.year
-        result["years"].append(year)
-        logger.info(f"Processing financial data for year {year}")
+    # Extract the financial data for each year
+    for year in financial_years:
+        # Extract balance sheet data
+        balance_sheet_items = db.query(BalanceSheetItem).filter(BalanceSheetItem.year_id == year.year_id).all()
+        if balance_sheet_items:
+            result["balance_sheet"][year.year] = {}
+            for item in balance_sheet_items:
+                if item.item_category not in result["balance_sheet"][year.year]:
+                    result["balance_sheet"][year.year][item.item_category] = {}
+                result["balance_sheet"][year.year][item.item_category][item.item_name] = item.item_value
 
-        # Get balance sheet items
-        logger.info(f"Retrieving balance sheet items for year {year}")
-        balance_sheet_items = db.query(BalanceSheetItem).filter(BalanceSheetItem.year_id == financial_year.year_id).all()
-        result["balance_sheet"][year] = {}
-        for item in balance_sheet_items:
-            if item.item_category not in result["balance_sheet"][year]:
-                result["balance_sheet"][year][item.item_category] = {}
-            result["balance_sheet"][year][item.item_category][item.item_name] = item.item_value
-        logger.info(f"Retrieved {len(balance_sheet_items)} balance sheet items for year {year}")
-        balance_sheet_count += len(balance_sheet_items)
+        # Extract income statement data
+        income_statement_items = db.query(IncomeStatementItem).filter(IncomeStatementItem.year_id == year.year_id).all()
+        if income_statement_items:
+            result["income_statement"][year.year] = {}
+            for item in income_statement_items:
+                if item.item_category not in result["income_statement"][year.year]:
+                    result["income_statement"][year.year][item.item_category] = {}
+                result["income_statement"][year.year][item.item_category][item.item_name] = item.item_value
 
-        # Get income statement items
-        logger.info(f"Retrieving income statement items for year {year}")
-        income_statement_items = db.query(IncomeStatementItem).filter(IncomeStatementItem.year_id == financial_year.year_id).all()
-        result["income_statement"][year] = {}
-        for item in income_statement_items:
-            if item.item_category not in result["income_statement"][year]:
-                result["income_statement"][year][item.item_category] = {}
-            result["income_statement"][year][item.item_category][item.item_name] = item.item_value
-        logger.info(f"Retrieved {len(income_statement_items)} income statement items for year {year}")
-        income_statement_count += len(income_statement_items)
+        # Extract cash flow data
+        cash_flow_items = db.query(CashFlowItem).filter(CashFlowItem.year_id == year.year_id).all()
+        if cash_flow_items:
+            result["cash_flow"][year.year] = {}
+            for item in cash_flow_items:
+                if item.item_category not in result["cash_flow"][year.year]:
+                    result["cash_flow"][year.year][item.item_category] = {}
+                result["cash_flow"][year.year][item.item_category][item.item_name] = item.item_value
 
-        # Get cash flow items
-        logger.info(f"Retrieving cash flow items for year {year}")
-        cash_flow_items = db.query(CashFlowItem).filter(CashFlowItem.year_id == financial_year.year_id).all()
-        result["cash_flow"][year] = {}
-        for item in cash_flow_items:
-            if item.item_category not in result["cash_flow"][year]:
-                result["cash_flow"][year][item.item_category] = {}
-            result["cash_flow"][year][item.item_category][item.item_name] = item.item_value
-        logger.info(f"Retrieved {len(cash_flow_items)} cash flow items for year {year}")
-        cash_flow_count += len(cash_flow_items)
+        # Extract financial ratios
+        financial_ratios = db.query(FinancialRatio).filter(FinancialRatio.year_id == year.year_id).all()
+        if financial_ratios:
+            result["ratios"][year.year] = {}
+            for ratio in financial_ratios:
+                if ratio.ratio_category not in result["ratios"][year.year]:
+                    result["ratios"][year.year][ratio.ratio_category] = {}
+                result["ratios"][year.year][ratio.ratio_category][ratio.ratio_name] = ratio.ratio_value
 
-        # Get financial ratios
-        logger.info(f"Retrieving financial ratios for year {year}")
-        financial_ratios = db.query(FinancialRatio).filter(FinancialRatio.year_id == financial_year.year_id).all()
-        result["ratios"][year] = {}
-        for ratio in financial_ratios:
-            if ratio.ratio_category not in result["ratios"][year]:
-                result["ratios"][year][ratio.ratio_category] = {}
-            result["ratios"][year][ratio.ratio_category][ratio.ratio_name] = ratio.ratio_value
-        logger.info(f"Retrieved {len(financial_ratios)} financial ratios for year {year}")
-        ratio_count += len(financial_ratios)
-
-    logger.info(f"Successfully retrieved financial data for document ID {document_id}: {len(financial_years)} years, {balance_sheet_count} balance sheet items, {income_statement_count} income statement items, {cash_flow_count} cash flow items, {ratio_count} financial ratios")
+    logger.info(f"Financial data retrieved successfully for document {document_id}")
     return result

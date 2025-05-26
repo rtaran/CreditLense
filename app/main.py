@@ -201,26 +201,53 @@ def financial_data_page(request: Request, document_id: int, db: Session = Depend
 
         # Log the amount of financial data retrieved
         years = financial_data.get("years", [])
-        logger.info(f"GET /financial-data/{document_id} - Retrieved financial data for {len(years)} years")
+        balance_sheet_count = sum(len(items) for year_data in financial_data.get("balance_sheet", {}).values() for category in year_data.values() for items in category.values())
+        income_statement_count = sum(len(items) for year_data in financial_data.get("income_statement", {}).values() for category in year_data.values() for items in category.values())
+        cash_flow_count = sum(len(items) for year_data in financial_data.get("cash_flow", {}).values() for category in year_data.values() for items in category.values())
+        ratio_count = sum(len(items) for year_data in financial_data.get("ratios", {}).values() for category in year_data.values() for items in category.values())
+        
+        logger.info(f"GET /financial-data/{document_id} - Retrieved financial data for {len(years)} years, "
+                   f"{balance_sheet_count} balance sheet items, {income_statement_count} income statement items, "
+                   f"{cash_flow_count} cash flow items, {ratio_count} financial ratios")
 
         # If no financial data exists, extract and store it
         if not years and document.pdf_string:
             logger.info(f"GET /financial-data/{document_id} - No financial data found, extracting from document")
             from app.financial_data import FinancialDataExtractor, store_financial_data
 
-            # Extract financial data from the PDF text using LLM
+            # Extract financial data from the PDF text
             extractor = FinancialDataExtractor(document.pdf_string)
-            logger.info(f"GET /financial-data/{document_id} - Extracting financial data using LLM")
+            
+            # Determine which LLM provider to use from environment
+            llm_provider = os.getenv("LLM_PROVIDER", "google").split(",")[0]
+            logger.info(f"GET /financial-data/{document_id} - Extracting financial data using LLM with provider: {llm_provider}")
+            
             try:
-                # Try to extract data using LLM first with OpenAI provider
-                financial_data = extractor.extract_data_with_llm(provider="openai")
-                logger.info(f"GET /financial-data/{document_id} - Successfully extracted financial data using LLM with OpenAI provider")
+                # Try to extract data using the configured LLM provider
+                financial_data = extractor.extract_data_with_llm(provider=llm_provider)
+                logger.info(f"GET /financial-data/{document_id} - Successfully extracted financial data using LLM with {llm_provider} provider")
             except Exception as e:
                 logger.error(f"GET /financial-data/{document_id} - Error extracting data with LLM: {str(e)}")
-                # Fall back to regex-based extraction if LLM fails
-                logger.info(f"GET /financial-data/{document_id} - Falling back to regex-based extraction")
-                financial_data = extractor.extract_all_data()
-                logger.info(f"GET /financial-data/{document_id} - Successfully extracted financial data using regex")
+                # Try alternative provider if available
+                alt_provider = "google" if llm_provider == "openai" else "openai"
+                logger.info(f"GET /financial-data/{document_id} - Trying alternative LLM provider: {alt_provider}")
+                
+                try:
+                    financial_data = extractor.extract_data_with_llm(provider=alt_provider)
+                    logger.info(f"GET /financial-data/{document_id} - Successfully extracted financial data using LLM with {alt_provider} provider")
+                except Exception as e2:
+                    logger.error(f"GET /financial-data/{document_id} - Error extracting data with alternative LLM: {str(e2)}")
+                    # Fall back to regex-based extraction if both LLM providers fail
+                    logger.info(f"GET /financial-data/{document_id} - Falling back to regex-based extraction")
+                    financial_data = extractor.extract_all_data()
+                    logger.info(f"GET /financial-data/{document_id} - Successfully extracted financial data using regex")
+
+            # Log the extracted data structure before storing
+            logger.debug(f"Financial data structure: Balance Sheet: {len(financial_data.get('balance_sheet', {}))} years, "
+                        f"Income Statement: {len(financial_data.get('income_statement', {}))} years, "
+                        f"Cash Flow: {len(financial_data.get('cash_flow', {}))} years, "
+                        f"Ratios: {len(financial_data.get('ratios', {}))} years, "
+                        f"Financial Ratios: {len(financial_data.get('financial_ratios', {}))} years")
 
             # Store the extracted data in the database
             logger.info(f"GET /financial-data/{document_id} - Storing financial data in database")
@@ -237,20 +264,31 @@ def financial_data_page(request: Request, document_id: int, db: Session = Depend
         selected_year = max(years or [0]) if years else None
         logger.info(f"GET /financial-data/{document_id} - Selected year: {selected_year}")
 
+        # Add metadata for debugging
+        data_status = {
+            "has_balance_sheet": bool(financial_data.get("balance_sheet", {}).get(selected_year, {})) if selected_year else False,
+            "has_income_statement": bool(financial_data.get("income_statement", {}).get(selected_year, {})) if selected_year else False,
+            "has_cash_flow": bool(financial_data.get("cash_flow", {}).get(selected_year, {})) if selected_year else False,
+            "has_financial_ratios": bool(financial_data.get("ratios", {}).get(selected_year, {})) if selected_year else False,
+        }
+        
+        logger.info(f"GET /financial-data/{document_id} - Data status: {data_status}")
+
         return templates.TemplateResponse(
             "financial_data.html", 
             {
                 "request": request, 
                 "document": document, 
                 "financial_data": financial_data,
-                "selected_year": selected_year
+                "selected_year": selected_year,
+                "data_status": data_status
             }
         )
     except HTTPException:
         # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        logger.error(f"GET /financial-data/{document_id} - Error retrieving financial data: {str(e)}")
+        logger.error(f"GET /financial-data/{document_id} - Error retrieving financial data: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error retrieving financial data: {str(e)}")
 
 # Add a route to redirect from document view to financial data view

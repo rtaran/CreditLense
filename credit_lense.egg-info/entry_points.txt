@@ -1,0 +1,3 @@
+[console_scripts]
+run-app = scripts.run_app:main
+run-tests = scripts.run_tests:main

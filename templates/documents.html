@@ -29,6 +29,7 @@
 
         <div class="actions">
             <a href="/upload" class="btn primary">Upload New Document</a>
+            <button id="delete-selected-documents" class="btn secondary" style="display: none;">Delete Selected</button>
         </div>
 
         {% if documents %}
@@ -36,6 +37,7 @@
             <table>
                 <thead>
                     <tr>
+                        <th><input type="checkbox" id="select-all-documents" title="Select all documents"></th>
                         <th>ID</th>
                         <th>Filename</th>
                         <th>Company</th>
@@ -45,6 +47,7 @@
                 <tbody>
                     {% for document in documents %}
                     <tr>
+                        <td><input type="checkbox" class="document-checkbox" data-id="{{ document.document_id }}" title="Select document"></td>
                         <td>{{ document.document_id }}</td>
                         <td>{{ document.pdf_file_name }}</td>
                         <td>{{ document.company_name or "N/A" }}</td>
